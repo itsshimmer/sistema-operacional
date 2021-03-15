@@ -161,8 +161,7 @@ public class Sistema {
     // ------------------- instancia e testa sistema
 	public static void main(String args[]) {
 		Sistema s = new Sistema();
-		s.test2();
-		s.test1();
+		s.programadosguri();
 	}
     // -------------------------------------------------------------------------------------------------------
     // --------------- TUDO ABAIXO DE MAIN É AUXILIAR PARA FUNCIONAMENTO DO SISTEMA - nao faz parte 
@@ -190,6 +189,18 @@ public class Sistema {
 		System.out.println("---------------------------------- após execucao ");
 		vm.cpu.run();
 		aux.dump(vm.m, 0, 15);
+	}
+
+	public void programadosguri(){
+		Aux aux = new Aux();
+		Word[] p = new Programas().programab;
+		aux.carga(p, vm.m);
+		vm.cpu.setContext(0);
+		System.out.println("---------------------------------- programa carregado ");
+		aux.dump(vm.m, 0, 70);
+		System.out.println("---------------------------------- após execucao ");
+		vm.cpu.run();
+		aux.dump(vm.m, 0, 70);
 	}
 
 	// -------------------------------------------  classes e funcoes auxiliares
@@ -243,6 +254,51 @@ public class Sistema {
 			new Word(Opcode.SUB, 7, 0, -1),
 			new Word(Opcode.JMPIG, 6, 7, -1), 
 			new Word(Opcode.STOP, -1, -1, -1) };
+
+		public Word[] programab = new Word[] {
+			// new Word(Opcode.LDI, 1, -1, 50), 
+			// new Word(Opcode.LDI, 5, -1, 5), 
+			// new Word(Opcode.JMPIG, 5, 1, -1), 
+			// new Word(Opcode.LDI, 5, -1, 69),
+			// new Word(Opcode.STD, 5, -1, 50),
+			// new Word(Opcode.STOP, -1, -1, -1), 
+			// new Word(Opcode.LDI, 2, -1, 0), 
+			// new Word(Opcode.ADD, 2, 1, -1),
+			// new Word(Opcode.LDI, 5, -1, 1), 
+			// new Word(Opcode.SUB, 1, 5, -1), 
+			// new Word(Opcode.LDI, 5, -1, 6), 
+			// new Word(Opcode.JMPIG, 5, 1, 0), 
+			// new Word(Opcode.STD, 1, -1, 50),
+			// new Word(Opcode.STOP, 1, -1, 0), 
+			// new Word(Opcode.DATA, 50, -1, 5) 
+			// new Word(Opcode.LDI, 1, -1, 50), 
+			// new Word(Opcode.STD, 1, -1, 20),
+			// new Word(Opcode.STOP, 1, -1, 0)
+			new Word(Opcode.LDI, 1, -1, 50),
+			new Word(Opcode.LDI, 7, -1, 7),
+			new Word(Opcode.JMPIG, 7, 1, -1), 
+			new Word(Opcode.LDI, 7, -1, 69),
+			new Word(Opcode.STD, 7, -1, 60),
+			new Word(Opcode.STOP, 1, -1, 0),
+			new Word(Opcode.LDI, 2, -1, 0),
+			new Word(Opcode.ADD, 2, 1, -1),
+			new Word(Opcode.LDI, 6, -1, 1),
+			new Word(Opcode.SUB, 1, 6, -1), 
+			new Word(Opcode.LDI, 7, -1, 8),
+			new Word(Opcode.JMPIG, 7, 1, -1), 
+			new Word(Opcode.STD, 1, -1, 60),
+
+			new Word(Opcode.STD, 0, -1, 50),
+			new Word(Opcode.STD, 1, -1, 51),
+			new Word(Opcode.STD, 2, -1, 52),
+			new Word(Opcode.STD, 3, -1, 53),
+			new Word(Opcode.STD, 4, -1, 54),
+			new Word(Opcode.STD, 5, -1, 55),
+			new Word(Opcode.STD, 6, -1, 56),
+			new Word(Opcode.STD, 7, -1, 57),
+
+			new Word(Opcode.STOP, 1, -1, 0)
+		};
    }
 
 }
