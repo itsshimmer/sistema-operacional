@@ -29,11 +29,16 @@ public class Sistema {
 	// -------------------------------------------------------------------------------------------------------
     // --------------------- C P U  -  definicoes da CPU ----------------------------------------------------- 
 
+	public enum Interrupts {
+		interruptNone, interruptInvalidInstruction, interruptInvalidAddress, interruptStop;
+	}
+
 	public enum Opcode {
 		DATA, ___,		    // se memoria nesta posicao tem um dado, usa DATA, se nao usada ee NULO ___
 		JMP, JMPI, JMPIG, JMPIL, JMPIE,  JMPIM, JMPIGM, JMPILM, JMPIEM, STOP,   // desvios e parada
 		ADDI, SUBI,  ADD, SUB, MULT,         // matematicos
-		LDI, LDD, STD,LDX, STX, SWAP;        // movimentacao
+		LDI, LDD, STD,LDX, STX, SWAP,        // movimentacao
+		TRAP;								// instrução para interrupção de software
 	}
 
 	public class CPU {
@@ -42,20 +47,41 @@ public class Sistema {
 		private Word ir; 			// instruction register,
 		private int[] reg;       	// registradores da CPU
 
+		private Interrupts interrupt; //instancia as interrupcoes
+		private InterruptHandler interruptHandler;
+		private TrapHandler trapHandler;
+
+		private int minimumMemory; // armazenar as bordas da memoria
+		private int maximumMemory;
+
 		private Word[] m;   // CPU acessa MEMORIA, guarda referencia 'm' a ela. memoria nao muda. ee sempre a mesma.
 						
-		public CPU(Word[] _m) {     // ref a MEMORIA e interrupt handler passada na criacao da CPU
+		public CPU(Word[] _m, InterruptHandler interruptHandler, TrapHandler trapHandler) {     // ref a MEMORIA e interrupt handler passada na criacao da CPU
 			m = _m; 				// usa o atributo 'm' para acessar a memoria.
-			reg = new int[8]; 		// aloca o espaço dos registradores
+			reg = new int[10]; 		// aloca o espaço dos registradores
+			this.interruptHandler = interruptHandler;
+			this.trapHandler = trapHandler;
 		}
 
-		public void setContext(int _pc) {  // no futuro esta funcao vai ter que ser 
+		public void setContext(int _pc, int minimumMemory, int maximumMemory) {  // no futuro esta funcao vai ter que ser 
 			pc = _pc;                                              // limite e pc (deve ser zero nesta versao)
+			interrupt = Interrupts.interruptNone;
+			this.minimumMemory = minimumMemory;
+			this.maximumMemory = maximumMemory;
+		}
+
+		private boolean valid(int address) {
+			if(address < minimumMemory || address > maximumMemory) {
+				interrupt = Interrupts.interruptInvalidAddress;
+				return false;
+			}
+			return true;
 		}
 	
 		public void run() { 		// execucao da CPU supoe que o contexto da CPU, vide acima, esta devidamente setado
 			while (true) { 			// ciclo de instrucoes. acaba cfe instrucao, veja cada caso.
 				// FETCH
+				if(valid(pc)) {
 					ir = m[pc]; 	// busca posicao da memoria apontada por pc, guarda em ir
 				// EXECUTA INSTRUCAO NO ir
 					switch (ir.opc) { // para cada opcode, sua execução
@@ -101,11 +127,23 @@ public class Sistema {
 							break;
 
 						case STOP: // por enquanto, para execucao
+							interrupt = Interrupts.interruptStop;
 							break;
+
+						case TRAP:
+							trapHandler.trap(this);
+							pc++;
+							break;
+
+						default: 
+							interrupt = Interrupts.interruptInvalidInstruction;
+							break;
+						
 					}
-				
+				}
 				// VERIFICA INTERRUPÇÃO !!! - TERCEIRA FASE DO CICLO DE INSTRUÇÕES
-				if (ir.opc==Opcode.STOP) {   
+				if (!(interrupt == Interrupts.interruptNone)) {   
+					interruptHandler.handle(interrupt);
 					break; // break sai do loop da cpu
 				}
 			}
@@ -122,13 +160,13 @@ public class Sistema {
         public Word[] m;     
         public CPU cpu;    
 
-        public VM(){   // vm deve ser configurada com endereço de tratamento de interrupcoes
+        public VM(InterruptHandler interruptHandler, TrapHandler trapHandler){   // vm deve ser configurada com endereço de tratamento de interrupcoes
 	     // memória
   		 	 tamMem = 1024;
 			 m = new Word[tamMem]; // m ee a memoria
 			 for (int i=0; i<tamMem; i++) { m[i] = new Word(Opcode.___,-1,-1,-1); };
 	  	 // cpu
-			 cpu = new CPU(m);
+			 cpu = new CPU(m,interruptHandler,trapHandler);
 	    }	
 	}
     // ------------------- V M  - fim ------------------------------------------------------------------------
@@ -141,16 +179,54 @@ public class Sistema {
 	// -------------------------------------------------------------------------------------------------------
 	// ------------------- S O F T W A R E - inicio ----------------------------------------------------------
 
+	public class InterruptHandler {
+
+		public void handle(Interrupts interrupts) {
+			System.out.println("A interruption has just happened! " + interrupts);
+		}
+
+	}
+
+	public class TrapHandler {
+		Aux aux = new Aux();
+		public void trap(CPU cpu) {
+			System.out.println("A system call has just happened! " + cpu.reg[8] + "|" + cpu.reg[9]);
+
+			switch(cpu.reg[8]) { // register 8 stores what needs to be done in the system call
+				case 1: // in this case we'll store data in the address stored in register 9
+					System.out.println("Please input an integer:");
+					Scanner input = new Scanner(System.in);
+					int anInt = input.nextInt();
+					cpu.m[cpu.reg[9]].p = anInt; // stores the input
+					cpu.m[cpu.reg[9]].opc = Opcode.DATA; // sets the destination as DATA
+					System.out.println("Value stored in the position " + cpu.reg[9]);
+					System.out.println("Stored value: ");
+					aux.dump(cpu.m[cpu.reg[9]]); // dumps the memory of the vm at the address that was set in register 9
+					break;
+
+				case 2: // in this case we'll print the data in the address stored in register 9
+					System.out.println("Output: ");
+					aux.dump(cpu.m[cpu.reg[9]]);
+					break;
+			}
+		}
+
+	}
+
 	// ------------------- VAZIO
 	
 
 	// -------------------------------------------------------------------------------------------------------
     // -------------------  S I S T E M A --------------------------------------------------------------------
-
+	public InterruptHandler interruptHandler;
+	public TrapHandler trapHandler;
 	public VM vm;
 
     public Sistema(){   // a VM com tratamento de interrupções
-		 vm = new VM();
+
+		interruptHandler = new InterruptHandler();
+		trapHandler = new TrapHandler();
+		vm = new VM(interruptHandler, trapHandler);
 	}
 
     // -------------------  S I S T E M A - fim --------------------------------------------------------------
@@ -167,35 +243,35 @@ public class Sistema {
     // --------------- TUDO ABAIXO DE MAIN É AUXILIAR PARA FUNCIONAMENTO DO SISTEMA - nao faz parte 
 
 	// -------------------------------------------- teste do sistema ,  veja classe de programas
-	public void test1(){
-		Aux aux = new Aux();
-		Word[] p = new Programas().fibonacci10;
-		aux.carga(p, vm.m);
-		vm.cpu.setContext(0);
-		System.out.println("---------------------------------- programa carregado ");
-		aux.dump(vm.m, 0, 33);
-		System.out.println("---------------------------------- após execucao ");
-		vm.cpu.run();
-		aux.dump(vm.m, 0, 33);
-	}
+	// public void test1(){
+	// 	Aux aux = new Aux();
+	// 	Word[] p = new Programas().fibonacci10;
+	// 	aux.carga(p, vm.m);
+	// 	vm.cpu.setContext(0);
+	// 	System.out.println("---------------------------------- programa carregado ");
+	// 	aux.dump(vm.m, 0, 33);
+	// 	System.out.println("---------------------------------- após execucao ");
+	// 	vm.cpu.run();
+	// 	aux.dump(vm.m, 0, 33);
+	// }
 
-	public void test2(){
-		Aux aux = new Aux();
-		Word[] p = new Programas().progMinimo;
-		aux.carga(p, vm.m);
-		vm.cpu.setContext(0);
-		System.out.println("---------------------------------- programa carregado ");
-		aux.dump(vm.m, 0, 15);
-		System.out.println("---------------------------------- após execucao ");
-		vm.cpu.run();
-		aux.dump(vm.m, 0, 15);
-	}
+	// public void test2(){
+	// 	Aux aux = new Aux();
+	// 	Word[] p = new Programas().progMinimo;
+	// 	aux.carga(p, vm.m);
+	// 	vm.cpu.setContext(0);
+	// 	System.out.println("---------------------------------- programa carregado ");
+	// 	aux.dump(vm.m, 0, 15);
+	// 	System.out.println("---------------------------------- após execucao ");
+	// 	vm.cpu.run();
+	// 	aux.dump(vm.m, 0, 15);
+	// }
 
 	public void programadosguri(){
 		Aux aux = new Aux();
 		Word[] p = new Programas().programab;
 		aux.carga(p, vm.m);
-		vm.cpu.setContext(0);
+		vm.cpu.setContext(0, vm.tamMem - 1, 0);
 		System.out.println("---------------------------------- programa carregado ");
 		aux.dump(vm.m, 0, 70);
 		System.out.println("---------------------------------- após execucao ");
