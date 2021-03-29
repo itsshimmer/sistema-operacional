@@ -1,4 +1,4 @@
-# sistema-operacional
+# Sistema-operacional
 
 ## Implementação
 Em nossa maquina virtual o grupo decidiu que era mais vantajoso continuar com a implementação provida em java previamente pelo professor, logo
