@@ -103,8 +103,9 @@ public class Sistema {
 						break;
 
 					case STD: // [A] ← Rs
-						if(!valid(ir.p)) {
+						if (!valid(ir.p)) { 
 							interrupt = Interrupts.interruptInvalidAddress;
+							break;
 						}
 						m[ir.p].opc = Opcode.DATA;
 						m[ir.p].p = reg[ir.r1];
@@ -122,7 +123,7 @@ public class Sistema {
 						break;
 
 					case STX: // [Rd] ←Rs
-						if(!valid(reg[ir.r1])) {
+						if (!valid(reg[ir.r1])) {
 							interrupt = Interrupts.interruptInvalidAddress;
 						}
 						m[reg[ir.r1]].opc = Opcode.DATA;
@@ -220,22 +221,22 @@ public class Sistema {
 			System.out.println("A system call has just happened! " + cpu.reg[8] + "|" + cpu.reg[9]);
 
 			switch (cpu.reg[8]) { // register 8 stores what needs to be done in the system call
-				case 1: // in this case we'll store data in the address stored in register 9
-					System.out.println("Please input an integer:");
-					Scanner input = new Scanner(System.in);
-					int anInt = input.nextInt();
-					cpu.m[cpu.reg[9]].p = anInt; // stores the input
-					cpu.m[cpu.reg[9]].opc = Opcode.DATA; // sets the destination as DATA
-					System.out.println("Value stored in the position " + cpu.reg[9]);
-					System.out.println("Stored value: ");
-					aux.dump(cpu.m[cpu.reg[9]]); // dumps the memory of the vm at the address that was set in register 9
-					break;
+			case 1: // in this case we'll store data in the address stored in register 9
+				System.out.println("Please input an integer:");
+				Scanner input = new Scanner(System.in);
+				int anInt = input.nextInt();
+				cpu.m[cpu.reg[9]].p = anInt; // stores the input
+				cpu.m[cpu.reg[9]].opc = Opcode.DATA; // sets the destination as DATA
+				System.out.println("Value stored in the position " + cpu.reg[9]);
+				System.out.println("Stored value: ");
+				aux.dump(cpu.m[cpu.reg[9]]); // dumps the memory of the vm at the address that was set in register 9
+				break;
 
-				case 2: // in this case we'll print the data in the address stored in register 9
-					System.out.println("Output: ");
-					aux.dump(cpu.m[cpu.reg[9]]);
-					break;
-				}
+			case 2: // in this case we'll print the data in the address stored in register 9
+				System.out.println("Output: ");
+				aux.dump(cpu.m[cpu.reg[9]]);
+				break;
+			}
 		}
 
 	}
@@ -265,13 +266,13 @@ public class Sistema {
 	public static void main(String args[]) {
 		// PROGRAMA NORMAL
 
-		// Sistema s = new Sistema();
-		// s.test1();
-		
-		// PROGRAMA ERRO MEMORIA
-		
 		Sistema s = new Sistema();
-		s.errorMemory();
+		s.test1();
+
+		// PROGRAMA ERRO MEMORIA
+
+		// Sistema s = new Sistema();
+		// s.errorMemory();
 
 		// PROGRAMA TESTE CHAMADA DE SISTEMA
 
@@ -285,17 +286,17 @@ public class Sistema {
 	// -------------------------------------------- teste do sistema , veja classe
 	// de programas
 
-	public void test1(){
-        Aux aux = new Aux();
-        Word[] p = new Programas().fibonacci10;
-        aux.carga(p, vm.m);
-        vm.cpu.setContext(0, 0, vm.tamMem -1);
-        System.out.println("---------------------------------- programa carregado ");
-        aux.dump(vm.m, 0, 33);
-        System.out.println("---------------------------------- após execucao ");
-        vm.cpu.run();
-        aux.dump(vm.m, 0, 33);
-    }
+	public void test1() {
+		Aux aux = new Aux();
+		Word[] p = new Programas().fibonacci10;
+		aux.carga(p, vm.m);
+		vm.cpu.setContext(0, 0, vm.tamMem - 1);
+		System.out.println("---------------------------------- programa carregado ");
+		aux.dump(vm.m, 0, 33);
+		System.out.println("---------------------------------- após execucao ");
+		vm.cpu.run();
+		aux.dump(vm.m, 0, 33);
+	}
 
 	// public void test2(){
 	// Aux aux = new Aux();
@@ -313,14 +314,15 @@ public class Sistema {
 		Aux aux = new Aux();
 		Word[] p = new Programas().programab;
 		aux.carga(p, vm.m);
-		//vm.cpu.setContext(0, vm.tamMem - 1, 0);
+		// vm.cpu.setContext(0, vm.tamMem - 1, 0);
 		vm.cpu.setContext(0, 0, vm.tamMem - 1);
 		System.out.println("---------------------------------- programa carregado ");
-		aux.dump(vm.m, 0, 70);
+		aux.dump(vm.m, 0, vm.tamMem);
 		System.out.println("---------------------------------- após execucao ");
 		vm.cpu.run();
-		aux.dump(vm.m, 0, 70);
+		aux.dump(vm.m, 0, vm.tamMem);
 	}
+
 	public void programTestTrap() {
 		Aux aux = new Aux();
 		Word[] p = new Programas().programTestTrap;
@@ -370,52 +372,73 @@ public class Sistema {
 	// copiar na memoria (vide aux.carga)
 	public class Programas {
 		public Word[] progMinimo = new Word[] { new Word(Opcode.LDI, 0, -1, 999), new Word(Opcode.STD, 0, -1, 10),
-				new Word(Opcode.STD, 0, -1, 11), new Word(Opcode.STD, 0, -1, 12), new Word(Opcode.STD, 0, -1, 13),
-				new Word(Opcode.STD, 0, -1, 14), new Word(Opcode.STOP, -1, -1, -1) };
+			new Word(Opcode.STD, 0, -1, 11),
+			new Word(Opcode.STD, 0, -1, 12), 
+			new Word(Opcode.STD, 0, -1, 13),
+			new Word(Opcode.STD, 0, -1, 14), 
+			new Word(Opcode.STOP, -1, -1, -1) };
 
-				public Word[] fibonacci10 = new Word[] { // mesmo que prog exemplo, so que usa r0 no lugar de r8
-					new Word(Opcode.LDI, 1, -1, 0), 
-					new Word(Opcode.STD, 1, -1, 20), //50 
-					new Word(Opcode.LDI, 2, -1, 1),
-					new Word(Opcode.STD, 2, -1, 21), //51
-					new Word(Opcode.LDI, 0, -1, 22), //52
-					new Word(Opcode.LDI, 6, -1, 6),
-					new Word(Opcode.LDI, 7, -1, 31), //61
-					new Word(Opcode.LDI, 3, -1, 0), 
-					new Word(Opcode.ADD, 3, 1, -1),
-					new Word(Opcode.LDI, 1, -1, 0), 
-					new Word(Opcode.ADD, 1, 2, -1), 
-					new Word(Opcode.ADD, 2, 3, -1),
-					new Word(Opcode.STX, 0, 2, -1), 
-					new Word(Opcode.ADDI, 0, -1, 1), 
-					new Word(Opcode.SUB, 7, 0, -1),
-					new Word(Opcode.JMPIG, 6, 7, -1), 
-					new Word(Opcode.STOP, -1, -1, -1) };
-		   
+		// programa operando de forma regular, fibonacci
+		public Word[] fibonacci10 = new Word[] { // mesmo que prog exemplo, so que usa r0 no lugar de r8
+			new Word(Opcode.LDI, 1, -1, 0), 
+			new Word(Opcode.STD, 1, -1, 20), // 50
+			new Word(Opcode.LDI, 2, -1, 1), 
+			new Word(Opcode.STD, 2, -1, 21), // 51
+			new Word(Opcode.LDI, 0, -1, 22), // 52
+			new Word(Opcode.LDI, 6, -1, 6), 
+			new Word(Opcode.LDI, 7, -1, 31), // 61
+			new Word(Opcode.LDI, 3, -1, 0), 
+			new Word(Opcode.ADD, 3, 1, -1), 
+			new Word(Opcode.LDI, 1, -1, 0),
+			new Word(Opcode.ADD, 1, 2, -1), 
+			new Word(Opcode.ADD, 2, 3, -1), 
+			new Word(Opcode.STX, 0, 2, -1),
+			new Word(Opcode.ADDI, 0, -1, 1), 
+			new Word(Opcode.SUB, 7, 0, -1), 
+			new Word(Opcode.JMPIG, 6, 7, -1),
+			new Word(Opcode.STOP, -1, -1, -1) };
 
-		public Word[] programab = new Word[] {
-				new Word(Opcode.LDI, 1, -1, 50), new Word(Opcode.LDI, 7, -1, 7), new Word(Opcode.JMPIG, 7, 1, -1),
-				new Word(Opcode.LDI, 7, -1, 69), new Word(Opcode.STD, 7, -1, 60), new Word(Opcode.STOP, 1, -1, 0),
-				new Word(Opcode.LDI, 2, -1, 0), new Word(Opcode.ADD, 2, 1, -1), new Word(Opcode.LDI, 6, -1, 1),
-				new Word(Opcode.SUB, 1, 6, -1), new Word(Opcode.LDI, 7, -1, 8), new Word(Opcode.JMPIG, 7, 1, -1),
-				new Word(Opcode.STD, 1, -1, 60),
+		// tentativa de implementação de um exercício, posteriormente usado apenas para
+		// demonstração de endereço inválido ao final
+		public Word[] programab = new Word[] { 
+			new Word(Opcode.LDI, 1, -1, 50), 
+			new Word(Opcode.LDI, 7, -1, 7),
+			new Word(Opcode.JMPIG, 7, 1, -1), 
+			new Word(Opcode.LDI, 7, -1, 69), 
+			new Word(Opcode.STD, 7, -1, 60),
+			new Word(Opcode.STOP, 1, -1, 0), 
+			new Word(Opcode.LDI, 2, -1, 0), 
+			new Word(Opcode.ADD, 2, 1, -1),
+			new Word(Opcode.LDI, 6, -1, 1), 
+			new Word(Opcode.SUB, 1, 6, -1), 
+			new Word(Opcode.LDI, 7, -1, 8),
+			new Word(Opcode.JMPIG, 7, 1, -1),
 
-				new Word(Opcode.STD, 0, -1, 50), new Word(Opcode.STD, 1, -1, 51), new Word(Opcode.STD, 2, -1, 52),
-				new Word(Opcode.STD, 3, -1, 53), new Word(Opcode.STD, 4, -1, 54), new Word(Opcode.STD, 5, -1, 55),
-				new Word(Opcode.STD, 6, -1, 56), new Word(Opcode.STD, 7, -1, 57),
-				new Word(Opcode.STD, 4, -1, 1025), // ERRO PROPOSITAL
+			// grava todos os registradores para fins de debug
+			new Word(Opcode.STD, 0, -1, 50), 
+			new Word(Opcode.STD, 1, -1, 51), 
+			new Word(Opcode.STD, 2, -1, 52),
+			new Word(Opcode.STD, 3, -1, 53), 
+			new Word(Opcode.STD, 4, -1, 54), 
+			new Word(Opcode.STD, 5, -1, 55),
+			new Word(Opcode.STD, 6, -1, 56), 
+			new Word(Opcode.STD, 7, -1, 57), 
 
-				new Word(Opcode.STOP, 1, -1, 0) };
+			new Word(Opcode.LDI, 1, -1, 59),
+			new Word(Opcode.STD, 1, -1, 1024),
 
-		public Word[] programTestTrap = new Word[] {
+			new Word(Opcode.STOP, 1, -1, 0) };
+
+		// programa para teste de chamada de sistema, leitura
+		public Word[] programTestTrap = new Word[] { 
 			new Word(Opcode.LDI, 8, -1, 1), 
-			new Word(Opcode.LDI, 9, -1, 50), 
-			new Word(Opcode.TRAP, -1, -1, -1), 
+			new Word(Opcode.LDI, 9, -1, 50),
+			new Word(Opcode.TRAP, -1, -1, -1),
 
 			new Word(Opcode.STOP, 1, -1, 0),
 
-			new Word(Opcode.DATA, 50, -1, 1)};
-			
+			new Word(Opcode.DATA, 50, -1, 1) };
+
 	}
 
 }
