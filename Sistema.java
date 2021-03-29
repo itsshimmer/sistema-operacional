@@ -37,7 +37,7 @@ public class Sistema {
 	// -----------------------------------------------------
 
 	public enum Interrupts {
-		interruptNone, interruptInvalidInstruction, interruptInvalidAddress, interruptStop;
+		interruptNone, interruptInvalidInstruction, interruptInvalidAddress, interruptOverflow, interruptStop;
 	}
 
 	public enum Opcode {
@@ -105,7 +105,9 @@ public class Sistema {
 					case STD: // [A] ← Rs
 						if (!valid(ir.p)) { 
 							interrupt = Interrupts.interruptInvalidAddress;
-							break;
+							break; 
+							// infelizmente nao podemos deixar executar o caso para tratar a interrupcao depois apenas, pois o 
+							// java ira dar excecao e ira parar
 						}
 						m[ir.p].opc = Opcode.DATA;
 						m[ir.p].p = reg[ir.r1];
@@ -113,12 +115,20 @@ public class Sistema {
 						break;
 
 					case ADD: // Rd ← Rd + Rs
-						reg[ir.r1] = reg[ir.r1] + reg[ir.r2];
+						try {
+							reg[ir.r1] = Math.addExact(reg[ir.r1], reg[ir.r2]);
+						} catch(ArithmeticException e){
+							interrupt = Interrupts.interruptOverflow;
+						}	
 						pc++;
 						break;
 
 					case ADDI: // Rd ← Rd + k
-						reg[ir.r1] = reg[ir.r1] + ir.p;
+						try {
+							reg[ir.r1] = Math.addExact(reg[ir.r1], ir.p);
+						} catch(ArithmeticException e){
+							interrupt = Interrupts.interruptOverflow;
+						}			
 						pc++;
 						break;
 
@@ -132,7 +142,11 @@ public class Sistema {
 						break;
 
 					case SUB: // Rd ← Rd - Rs
-						reg[ir.r1] = reg[ir.r1] - reg[ir.r2];
+						try { 
+							reg[ir.r1] = reg[ir.r1] - reg[ir.r2];
+						} catch(StackOverflowError e){
+							interrupt = Interrupts.interruptOverflow;
+						}			
 						pc++;
 						break;
 
@@ -264,20 +278,35 @@ public class Sistema {
 	// -------------------------------------------------------------------------------------------------------
 	// ------------------- instancia e testa sistema
 	public static void main(String args[]) {
-		// PROGRAMA NORMAL
+		// PROGRAMA NORMAL FIBONACCI
 
-		Sistema s = new Sistema();
-		s.test1();
+		// Sistema s = new Sistema();
+		// s.test1();
 
-		// PROGRAMA ERRO MEMORIA
+		// PROGRAMA INTERRUPÇÃO ENDEREÇO INVÁLIDO
 
 		// Sistema s = new Sistema();
 		// s.errorMemory();
 
-		// PROGRAMA TESTE CHAMADA DE SISTEMA
+		// PROGRAMA TESTE CHAMADA DE SISTEMA INPUT
 
 		// Sistema s = new Sistema();
-		// s.programTestTrap();
+		// s.programTestTrapInput();
+
+		// PROGRAMA TESTE CHAMADA DE SISTEMA OUTPUT
+
+		// Sistema s = new Sistema();
+		// s.programTestTrapOutput();
+
+		// PROGRAMA INTERRUPÇÃO INSTRUÇÃO INVÁLIDA
+
+		// Sistema s = new Sistema();
+		// s.programTestInvalidInstruction();
+
+		// PROGRAMA TESTE OVERFLOW
+
+		Sistema s = new Sistema();
+		s.programTestOverflow();
 	}
 	// -------------------------------------------------------------------------------------------------------
 	// --------------- TUDO ABAIXO DE MAIN É AUXILIAR PARA FUNCIONAMENTO DO SISTEMA
@@ -317,22 +346,58 @@ public class Sistema {
 		// vm.cpu.setContext(0, vm.tamMem - 1, 0);
 		vm.cpu.setContext(0, 0, vm.tamMem - 1);
 		System.out.println("---------------------------------- programa carregado ");
-		aux.dump(vm.m, 0, vm.tamMem);
-		System.out.println("---------------------------------- após execucao ");
+		aux.dump(vm.m, 0, 30);
+		//System.out.println("---------------------------------- após execucao ");
 		vm.cpu.run();
-		aux.dump(vm.m, 0, vm.tamMem);
+		//aux.dump(vm.m, 0, vm.tamMem);
 	}
 
-	public void programTestTrap() {
+	public void programTestTrapInput() {
 		Aux aux = new Aux();
-		Word[] p = new Programas().programTestTrap;
+		Word[] p = new Programas().programTestTrapInput;
 		aux.carga(p, vm.m);
 		vm.cpu.setContext(0, 0, vm.tamMem - 1);
 		System.out.println("---------------------------------- programa carregado ");
-		aux.dump(vm.m, 0, 70);
+		aux.dump(vm.m, 0, 10);
 		System.out.println("---------------------------------- após execucao ");
 		vm.cpu.run();
-		aux.dump(vm.m, 0, 70);
+		aux.dump(vm.m, 0, 10);
+	}
+
+	public void programTestTrapOutput() {
+		Aux aux = new Aux();
+		Word[] p = new Programas().programTestTrapOutput;
+		aux.carga(p, vm.m);
+		vm.cpu.setContext(0, 0, vm.tamMem - 1);
+		System.out.println("---------------------------------- programa carregado ");
+		aux.dump(vm.m, 0, 10);
+		System.out.println("---------------------------------- após execucao ");
+		vm.cpu.run();
+		aux.dump(vm.m, 0, 10);
+	}
+
+	public void programTestInvalidInstruction() {
+		Aux aux = new Aux();
+		Word[] p = new Programas().programTestInvalidInstruction;
+		aux.carga(p, vm.m);
+		vm.cpu.setContext(0, 0, vm.tamMem - 1);
+		System.out.println("---------------------------------- programa carregado ");
+		aux.dump(vm.m, 0, 10);
+		System.out.println("---------------------------------- após execucao ");
+		vm.cpu.run();
+		aux.dump(vm.m, 0, 10);
+	}
+
+	public void programTestOverflow() {
+		Aux aux = new Aux();
+		Word[] p = new Programas().programTestOverflow;
+		aux.carga(p, vm.m);
+		vm.cpu.setContext(0, 0, vm.tamMem - 1);
+		System.out.println("---------------------------------- programa carregado ");
+		aux.dump(vm.m, 0, 10);
+		System.out.println("---------------------------------- após execucao ");
+		vm.cpu.run();
+		aux.dump(vm.m, 0, 10);
 	}
 
 	// ------------------------------------------- classes e funcoes auxiliares
@@ -424,16 +489,46 @@ public class Sistema {
 			new Word(Opcode.STD, 6, -1, 56), 
 			new Word(Opcode.STD, 7, -1, 57), 
 
+			// interrupção endereço inválido
 			new Word(Opcode.LDI, 1, -1, 59),
 			new Word(Opcode.STD, 1, -1, 1024),
 
 			new Word(Opcode.STOP, 1, -1, 0) };
 
 		// programa para teste de chamada de sistema, leitura
-		public Word[] programTestTrap = new Word[] { 
+		public Word[] programTestTrapInput = new Word[] { 
 			new Word(Opcode.LDI, 8, -1, 1), 
+			new Word(Opcode.LDI, 9, -1, 8),
+			new Word(Opcode.TRAP, -1, -1, -1),
+
+			new Word(Opcode.STOP, 1, -1, 0)};
+
+		public Word[] programTestTrapOutput = new Word[] { 
+			new Word(Opcode.LDI, 8, -1, 2), // registrador definido para output(trap)
+			new Word(Opcode.LDI, 9, -1, 8), // registrador define output para conteudo do endereço 59
+			new Word(Opcode.STD, 9, -1, 8), // armazena no endereço 59 o conteudo do r9(8)
+
+			new Word(Opcode.TRAP, -1, -1, -1), // chamada de sistema, saida deve ser DATA 8 do endereço 8
+
+			new Word(Opcode.STOP, 1, -1, 0)};
+
+		// programa para teste de chamada de sistema, leitura
+		public Word[] programTestInvalidInstruction = new Word[] { 
+			new Word(Opcode.___, 8, -1, 1), 
 			new Word(Opcode.LDI, 9, -1, 50),
 			new Word(Opcode.TRAP, -1, -1, -1),
+
+			new Word(Opcode.STOP, 1, -1, 0),
+
+			new Word(Opcode.DATA, 50, -1, 1) };
+
+		public Word[] programTestOverflow = new Word[] { 
+			new Word(Opcode.LDI, 0, -1, 2147483647), 
+			new Word(Opcode.LDI, 1, -1, 1236), 
+			new Word(Opcode.ADD, 0, 1, -1),
+
+			new Word(Opcode.STD, 0, -1, 8), 
+			new Word(Opcode.STD, 1, -1, 9), 
 
 			new Word(Opcode.STOP, 1, -1, 0),
 
