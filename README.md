@@ -44,3 +44,13 @@ public static void main(String args[]) {
   ```
   Nesse metódo pode-se perceber que todos os programas menos um estão comentados, para conseguir testar os demais comente o atual e descomente o
   que dejesa testar, no código como demonstrado acima há comentarios para cada programa, expecificando sua funcionalidade.
+  
+  ## Saídas
+  Aqui iremos demonstrar a saida de cada programa utilizado dentro da maquina virtual.
+  #### PROGRAMA TESTE OVERFLOW
+  #### PROGRAMA INTERRUPÇÃO INSTRUÇÃO INVÁLIDA
+  #### PROGRAMA TESTE CHAMADA DE SISTEMA OUTPUT
+  #### PROGRAMA TESTE CHAMADA DE SISTEMA INPUT
+  #### PROGRAMA INTERRUPÇÃO ENDEREÇO INVÁLIDO
+  #### PROGRAMA NORMAL FIBONACCI
+
