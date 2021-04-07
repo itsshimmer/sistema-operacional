@@ -210,7 +210,7 @@ public class Sistema {
 			cpu.maximumMemory = tamMem;
 			cpu.minimumMemory = 0;
 
-			memoryManager = new MemoryManager(cpu);
+			memoryManager = new MemoryManager(cpu.m);
 		}
 	}
 	// ------------------- V M - fim
@@ -229,15 +229,15 @@ public class Sistema {
 	public class MemoryManager {
 		final int pageSize = 16; // you may configure the pageSize here
 		
-		CPU cpu;
+		private Word[] memory;
 		int availableFrames;
 		int totalFrames;
 		int allocatedFrames = 0;
-		Boolean[] memoryMap;
+		private Boolean[] memoryMap;
 
-		public MemoryManager(CPU cpu) {
-			this.cpu = cpu;
-			availableFrames = cpu.maximumMemory/pageSize;
+		public MemoryManager(Word[] memory) {
+			this.memory = memory;
+			availableFrames = memory.length/pageSize;
 			totalFrames = availableFrames;
 			memoryMap = new Boolean[availableFrames];
 			for(int i = 0; i<availableFrames; i++) {
@@ -295,10 +295,10 @@ public class Sistema {
 						if(lastInsertedIndex+frameOffset>=words.length) {
 							break;
 						}
-						cpu.m[frame*pageSize+frameOffset].opc = words[lastInsertedIndex+frameOffset].opc;
-						cpu.m[frame*pageSize+frameOffset].r1 = words[lastInsertedIndex+frameOffset].r1;
-						cpu.m[frame*pageSize+frameOffset].r2 = words[lastInsertedIndex+frameOffset].r2;
-						cpu.m[frame*pageSize+frameOffset].p = words[lastInsertedIndex+frameOffset].p;
+						memory[frame*pageSize+frameOffset].opc = words[lastInsertedIndex+frameOffset].opc;
+						memory[frame*pageSize+frameOffset].r1 = words[lastInsertedIndex+frameOffset].r1;
+						memory[frame*pageSize+frameOffset].r2 = words[lastInsertedIndex+frameOffset].r2;
+						memory[frame*pageSize+frameOffset].p = words[lastInsertedIndex+frameOffset].p;
 					}
 					lastInsertedIndex = lastInsertedIndex + pageSize; // controls the iteration of the words(data)
 					memoryMap[frame] = true; // frame is now occupied
