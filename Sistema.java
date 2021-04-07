@@ -242,6 +242,12 @@ public class Sistema {
 			memoryMap = new Boolean[availableFrames];
 			for(int i = 0; i<availableFrames; i++) {
 				memoryMap[i] = false;
+
+				////////////////////////////////////////////////////////////////////////////////////
+				if(i == 1) {
+					memoryMap[i] = true;//   TESTE      ////////////////////////////////////////////
+				}
+				////////////////////////////////////////////////////////////////////////////////////
 			}
 		}
 
@@ -267,7 +273,7 @@ public class Sistema {
 			if (availableFrames==0) return null; // no available memory
 
 			// calculates how many frames we need
-			int neededFrames = (int)Math.ceil(words.length/pageSize);
+			int neededFrames = (int)Math.ceil((double)words.length/(double)pageSize);
 
 			// check if we have enough frames
 			if (neededFrames<=availableFrames) {
@@ -284,20 +290,17 @@ public class Sistema {
 					// finds frame to fill
 					int frame = findAvailableFrame(); 
 
-					// fills whole frame
+					// fills appropriate memory position with data
 					for(int frameOffset = 0; frameOffset<pageSize; frameOffset++) {
-
-						// fills appropriate memory position with data
-						for (int wordsIndex = lastInsertedIndex; wordsIndex < lastInsertedIndex+pageSize; wordsIndex++) {
-							cpu.m[frame*pageSize+frameOffset].opc = words[wordsIndex].opc;
-							cpu.m[frame*pageSize+frameOffset].r1 = words[wordsIndex].r1;
-							cpu.m[frame*pageSize+frameOffset].r2 = words[wordsIndex].r2;
-							cpu.m[frame*pageSize+frameOffset].p = words[wordsIndex].p;
-							
+						if(lastInsertedIndex+frameOffset>=words.length) {
+							break;
 						}
-						lastInsertedIndex = lastInsertedIndex + pageSize;
-
+						cpu.m[frame*pageSize+frameOffset].opc = words[lastInsertedIndex+frameOffset].opc;
+						cpu.m[frame*pageSize+frameOffset].r1 = words[lastInsertedIndex+frameOffset].r1;
+						cpu.m[frame*pageSize+frameOffset].r2 = words[lastInsertedIndex+frameOffset].r2;
+						cpu.m[frame*pageSize+frameOffset].p = words[lastInsertedIndex+frameOffset].p;
 					}
+					lastInsertedIndex = lastInsertedIndex + pageSize; // controls the iteration of the words(data)
 					memoryMap[frame] = true; // frame is now occupied
 					frames[currentNewFrame] = frame; // stores frame id
 					availableFrames--;
@@ -512,10 +515,14 @@ public class Sistema {
 
 	public void programTestMemManager() {
 		Aux aux = new Aux();
-		Word[] p = new Programas().fibonacci10;
+		Word[] p = new Programas().data;
 		// aux.carga(p, vm.m);
 		int[] frames = vm.memoryManager.alloc(p);
-		aux.dump(vm.m, 0, 32);
+		aux.dump(vm.m, 0, 64);
+		System.out.println(frames.length);
+		System.out.println(frames[0]);
+		System.out.println(frames[1]);
+		System.out.println(frames[2]);
 		// vm.cpu.setContext(0, 0, vm.tamMem - 1);
 		// System.out.println("---------------------------------- programa carregado ");
 		// aux.dump(vm.m, 0, 10);
@@ -658,6 +665,44 @@ public class Sistema {
 
 			new Word(Opcode.DATA, 50, -1, 1) };
 
+		public Word[] data = new Word[] { // dados
+			new Word(Opcode.LDI, 1, -1, 0), 
+			new Word(Opcode.STD, 1, -1, 20), // 50
+			new Word(Opcode.LDI, 2, -1, 1), 
+			new Word(Opcode.STD, 2, -1, 21), // 51
+			new Word(Opcode.LDI, 0, -1, 22), // 52
+			new Word(Opcode.LDI, 6, -1, 6), 
+			new Word(Opcode.LDI, 7, -1, 31), // 61
+			new Word(Opcode.LDI, 3, -1, 0), 
+			new Word(Opcode.ADD, 3, 1, -1), 
+			new Word(Opcode.LDI, 1, -1, 0),
+			new Word(Opcode.ADD, 1, 2, -1), 
+			new Word(Opcode.ADD, 2, 3, -1), 
+			new Word(Opcode.STX, 0, 2, -1),
+			new Word(Opcode.ADDI, 0, -1, 1), 
+			new Word(Opcode.SUB, 7, 0, -1), 
+			new Word(Opcode.JMPIG, 6, 7, -1),
+			new Word(Opcode.STOP, -1, -1, -1),
+			new Word(Opcode.LDI, 1, -1, 0), 
+			new Word(Opcode.STD, 1, -1, 20), // 50
+			new Word(Opcode.LDI, 2, -1, 1), 
+			new Word(Opcode.STD, 2, -1, 21), // 51
+			new Word(Opcode.LDI, 0, -1, 22), // 52
+			new Word(Opcode.LDI, 6, -1, 6), 
+			new Word(Opcode.LDI, 7, -1, 31), // 61
+			new Word(Opcode.LDI, 3, -1, 0), 
+			new Word(Opcode.ADD, 3, 1, -1), 
+			new Word(Opcode.LDI, 1, -1, 0),
+			new Word(Opcode.ADD, 1, 2, -1), 
+			new Word(Opcode.ADD, 2, 3, -1), 
+			new Word(Opcode.STX, 0, 2, -1),
+			new Word(Opcode.ADDI, 0, -1, 1), 
+			new Word(Opcode.SUB, 7, 0, -1), 
+			new Word(Opcode.JMPIG, 6, 7, -1),
+			new Word(Opcode.STOP, -1, -1, -1) };
+
 	}
+
+	
 
 }
