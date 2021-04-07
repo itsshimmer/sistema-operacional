@@ -7,8 +7,6 @@
 
 import java.util.*;
 
-//import org.graalvm.compiler.nodeinfo.StructuralInput.Memory;
-
 public class Sistema {
 
 	// -------------------------------------------------------------------------------------------------------
@@ -195,6 +193,7 @@ public class Sistema {
 		public int tamMem;
 		public Word[] m;
 		public CPU cpu;
+		public MemoryManager memoryManager;
 
 		public VM(InterruptHandler interruptHandler, TrapHandler trapHandler) { // vm deve ser configurada com endereço
 																				// de tratamento de interrupcoes
@@ -207,6 +206,11 @@ public class Sistema {
 			;
 			// cpu
 			cpu = new CPU(m, interruptHandler, trapHandler);
+
+			cpu.maximumMemory = tamMem;
+			cpu.minimumMemory = 0;
+
+			memoryManager = new MemoryManager(cpu);
 		}
 	}
 	// ------------------- V M - fim
@@ -241,7 +245,7 @@ public class Sistema {
 			}
 		}
 
-		public int findAvailableFrame() {
+		private int findAvailableFrame() {
 
 			// iterates through all frames
 			for(int i = 0; i < totalFrames; i++) {
@@ -266,7 +270,7 @@ public class Sistema {
 			int neededFrames = (int)Math.ceil(words.length/pageSize);
 
 			// check if we have enough frames
-			if (neededFrames>=availableFrames) {
+			if (neededFrames<=availableFrames) {
 				
 				// array to store filled frames index
 				int[] frames = new int[neededFrames];
@@ -281,7 +285,7 @@ public class Sistema {
 					int frame = findAvailableFrame(); 
 
 					// fills whole frame
-					for(int frameOffset = 0; frameOffset<16; frameOffset++) {
+					for(int frameOffset = 0; frameOffset<pageSize; frameOffset++) {
 
 						// fills appropriate memory position with data
 						for (int wordsIndex = lastInsertedIndex; wordsIndex < lastInsertedIndex+pageSize; wordsIndex++) {
@@ -289,7 +293,9 @@ public class Sistema {
 							cpu.m[frame*pageSize+frameOffset].r1 = words[wordsIndex].r1;
 							cpu.m[frame*pageSize+frameOffset].r2 = words[wordsIndex].r2;
 							cpu.m[frame*pageSize+frameOffset].p = words[wordsIndex].p;
+							
 						}
+						lastInsertedIndex = lastInsertedIndex + pageSize;
 
 					}
 					memoryMap[frame] = true; // frame is now occupied
@@ -404,8 +410,13 @@ public class Sistema {
 
 		// PROGRAMA TESTE OVERFLOW
 
+		// Sistema s = new Sistema();
+		// s.programTestOverflow();
+
+		// PROGRAMA TESTE MEMORY MANAGER
+
 		Sistema s = new Sistema();
-		s.programTestOverflow();
+		s.programTestMemManager();
 	}
 	// -------------------------------------------------------------------------------------------------------
 	// --------------- TUDO ABAIXO DE MAIN É AUXILIAR PARA FUNCIONAMENTO DO SISTEMA
@@ -497,6 +508,20 @@ public class Sistema {
 		System.out.println("---------------------------------- após execucao ");
 		vm.cpu.run();
 		aux.dump(vm.m, 0, 10);
+	}
+
+	public void programTestMemManager() {
+		Aux aux = new Aux();
+		Word[] p = new Programas().fibonacci10;
+		// aux.carga(p, vm.m);
+		int[] frames = vm.memoryManager.alloc(p);
+		aux.dump(vm.m, 0, 32);
+		// vm.cpu.setContext(0, 0, vm.tamMem - 1);
+		// System.out.println("---------------------------------- programa carregado ");
+		// aux.dump(vm.m, 0, 10);
+		// System.out.println("---------------------------------- após execucao ");
+		// vm.cpu.run();
+		// aux.dump(vm.m, 0, 10);
 	}
 
 	// ------------------------------------------- classes e funcoes auxiliares
