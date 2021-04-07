@@ -239,10 +239,12 @@ public class Sistema {
 		}
 
 		private int currentProcessIdentifier = 0;
+		private CPU cpu;
 		private MemoryManager memoryManager;
 		private ArrayList<Process> processList = new ArrayList<>();
 
-		public ProcessManager(MemoryManager memoryManager) {
+		public ProcessManager(CPU cpu, MemoryManager memoryManager) {
+			this.cpu = cpu;
 			this.memoryManager = memoryManager;
 		}
 
@@ -254,6 +256,17 @@ public class Sistema {
 			if(memoryPages == null) return false; // couldn't allocate program
 			Process newProcess = new Process(currentProcessIdentifier, memoryPages);
 			processList.add(newProcess);
+			return true;
+		}
+
+		public boolean runProcess() {
+			try {
+				Process currentProcess = processList.get(0);
+			} catch(IndexOutOfBoundsException e){
+				// no processes waiting
+				return false;
+			}
+			//cpu.run(currentProcess.memoryPages);
 			return true;
 		}
 
@@ -363,8 +376,13 @@ public class Sistema {
 		public int accessAddress(int address, int[] frames) {
 			int destinationPage = address/pageSize;
 			int destinationOffset = address%pageSize;
-			// frames[destinationPage] will crash the VM if page is invalid
-			int physicalMemoryAddress = frames[destinationPage]*pageSize+destinationOffset;
+			int physicalMemoryAddress;
+			try {
+				physicalMemoryAddress = frames[destinationPage]*pageSize+destinationOffset;
+			} catch(IndexOutOfBoundsException e) {
+				// invalid destination page
+				return -1;
+			}
 			return physicalMemoryAddress;
 		}
 
