@@ -226,6 +226,39 @@ public class Sistema {
 	// ------------------- S O F T W A R E - inicio
 	// ----------------------------------------------------------
 
+	public class ProcessManager {
+
+		public class Process {
+			int id;
+			int[] memoryPages;
+
+			public Process(int id, int[] memoryPages) {
+				this.id = id;
+				this.memoryPages = memoryPages;
+			}
+		}
+
+		private int currentProcessIdentifier = 0;
+		private MemoryManager memoryManager;
+		private ArrayList<Process> processList = new ArrayList<>();
+
+		public ProcessManager(MemoryManager memoryManager) {
+			this.memoryManager = memoryManager;
+		}
+
+		// createProcess function
+		// success: true
+		// failed: false
+		public boolean createProcess(Word[] program) {
+			int[] memoryPages = memoryManager.alloc(program); // tries to allocate the program in the memory
+			if(memoryPages == null) return false; // couldn't allocate program
+			Process newProcess = new Process(currentProcessIdentifier, memoryPages);
+			processList.add(newProcess);
+			return true;
+		}
+
+	}
+
 	public class MemoryManager {
 		final int pageSize = 16; // you may configure the pageSize here
 		
@@ -326,6 +359,15 @@ public class Sistema {
 				}
 			}
 		}
+
+		public int accessAddress(int address, int[] frames) {
+			int destinationPage = address/pageSize;
+			int destinationOffset = address%pageSize;
+			// frames[destinationPage] will crash the VM if page is invalid
+			int physicalMemoryAddress = frames[destinationPage]*pageSize+destinationOffset;
+			return physicalMemoryAddress;
+		}
+
 	}
 
 	public class InterruptHandler {
@@ -518,6 +560,10 @@ public class Sistema {
 		Word[] p = new Programas().data;
 		// aux.carga(p, vm.m);
 		int[] frames = vm.memoryManager.alloc(p);
+		/*
+		boolean status = vm.processManager.createProcess(program);
+		System.out.println("new process successful? "+ status);
+		*/
 		aux.dump(vm.m, 0, 64);
 		System.out.println(frames.length);
 		System.out.println(frames[0]);
