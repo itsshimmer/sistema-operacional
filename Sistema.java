@@ -2,10 +2,12 @@
 // Prof. Fernando Dotti
 // Código fornecido como parte da solução do projeto de Sistemas Operacionais
 //
-// Fase 1 - máquina virtual (vide enunciado correspondente)
+// João Brentano, João Victor Granzinoli e Eduardo Soares
 //
 
 import java.util.*;
+
+//import org.graalvm.compiler.nodeinfo.StructuralInput.Memory;
 
 public class Sistema {
 
@@ -219,6 +221,103 @@ public class Sistema {
 	// -------------------------------------------------------------------------------------------------------
 	// ------------------- S O F T W A R E - inicio
 	// ----------------------------------------------------------
+
+	public class MemoryManager {
+		final int pageSize = 16; // you may configure the pageSize here
+		
+		CPU cpu;
+		int availableFrames;
+		int totalFrames;
+		int allocatedFrames = 0;
+		Boolean[] memoryMap;
+
+		public MemoryManager(CPU cpu) {
+			this.cpu = cpu;
+			availableFrames = cpu.maximumMemory/pageSize;
+			totalFrames = availableFrames;
+			memoryMap = new Boolean[availableFrames];
+			for(int i = 0; i<availableFrames; i++) {
+				memoryMap[i] = false;
+			}
+		}
+
+		public int findAvailableFrame() {
+
+			// iterates through all frames
+			for(int i = 0; i < totalFrames; i++) {
+
+				// if an available frame is found returns
+				if(memoryMap[i] == false) {
+					return i;
+				}
+			}
+			// error
+			return -1;
+		}
+
+		// alloc function
+		// success: int[] with frames
+		// failed: null
+		public int[] alloc(Word[] words) {
+			if (words.length<1) return null; // invalid alloc request
+			if (availableFrames==0) return null; // no available memory
+
+			// calculates how many frames we need
+			int neededFrames = (int)Math.ceil(words.length/pageSize);
+
+			// check if we have enough frames
+			if (neededFrames>=availableFrames) {
+				
+				// array to store filled frames index
+				int[] frames = new int[neededFrames];
+
+				// index to iterate data received
+				int lastInsertedIndex = 0;
+
+				// fills X frames(as needed)
+				for(int currentNewFrame = 0; currentNewFrame<neededFrames; currentNewFrame++) {
+
+					// finds frame to fill
+					int frame = findAvailableFrame(); 
+
+					// fills whole frame
+					for(int frameOffset = 0; frameOffset<16; frameOffset++) {
+
+						// fills appropriate memory position with data
+						for (int wordsIndex = lastInsertedIndex; wordsIndex < lastInsertedIndex+pageSize; wordsIndex++) {
+							cpu.m[frame*pageSize+frameOffset].opc = words[wordsIndex].opc;
+							cpu.m[frame*pageSize+frameOffset].r1 = words[wordsIndex].r1;
+							cpu.m[frame*pageSize+frameOffset].r2 = words[wordsIndex].r2;
+							cpu.m[frame*pageSize+frameOffset].p = words[wordsIndex].p;
+						}
+
+					}
+					memoryMap[frame] = true; // frame is now occupied
+					frames[currentNewFrame] = frame; // stores frame id
+					availableFrames--;
+					allocatedFrames++;
+				}
+				// success
+				return frames;				
+			}
+			// fails because there's not enough frames available
+			return null;
+		}
+
+		public void free(int[] frames) {
+			
+			// iterates through frames that need freeing
+			for(int index = 0; index < frames.length; index++) { 
+
+				// if memory is allocated, frees it
+				if(memoryMap[frames[index]] = true) {
+					memoryMap[frames[index]] = false;
+					availableFrames++;
+					allocatedFrames--;
+				}
+			}
+		}
+	}
 
 	public class InterruptHandler {
 
