@@ -273,6 +273,7 @@ public class Sistema {
 		// failed: false
 		public boolean createProcess(Word[] program) {
 			int[] memoryPages = memoryManager.alloc(program); // tries to allocate the program in the memory
+			System.out.println("ProcessManager.createProcess: couldn't allocate program");
 			if(memoryPages == null) return false; // couldn't allocate program
 			ProcessControlBlock newProcess = new ProcessControlBlock(currentProcessIdentifier, memoryPages);
 			processList.add(newProcess);
@@ -361,8 +362,14 @@ public class Sistema {
 		// success: int[] with frames
 		// failed: null
 		public int[] alloc(Word[] words) {
-			if (words.length<1) return null; // invalid alloc request
-			if (availableFrames==0) return null; // no available memory
+			if (words.length<1) { // invalid alloc request
+				System.out.println("MemoryManager.alloc: invalid alloc request");
+				return null;
+			} 
+			if (availableFrames==0) {  // no available memory
+				System.out.println("MemoryManager.alloc: no available memory");
+				return null;
+			}
 
 			// calculates how many frames we need
 			int neededFrames = (int)Math.ceil((double)words.length/(double)cpu.pageSize);
@@ -402,6 +409,7 @@ public class Sistema {
 				return frames;				
 			}
 			// fails because there's not enough frames available
+			System.out.println("MemoryManager.alloc: fails because there's not enough frames available");
 			return null;
 		}
 
