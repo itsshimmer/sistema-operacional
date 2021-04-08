@@ -2,7 +2,7 @@
 // Prof. Fernando Dotti
 // Código fornecido como parte da solução do projeto de Sistemas Operacionais
 //
-// João Brentano, João Victor Granzinoli e Eduardo Soares
+// João Brentano, João Victor Granzinoli, Eduardo Soares e William de Lima
 //
 
 import java.util.*;
@@ -37,7 +37,7 @@ public class Sistema {
 	// -----------------------------------------------------
 
 	public enum Interrupts {
-		interruptNone, interruptInvalidInstruction, interruptInvalidAddress, interruptOverflow, interruptStop;
+		interruptNone, interruptInvalidInstruction, interruptInvalidAddress, interruptOverflow, interruptInvalidPaging, interruptStop;
 	}
 
 	public enum Opcode {
@@ -53,6 +53,9 @@ public class Sistema {
 		private int pc; // ... composto de program counter,
 		private Word ir; // instruction register,
 		private int[] reg; // registradores da CPU
+
+		private int[] pageTable;
+		final int pageSize = 16; // you may configure the pageSize here
 
 		private Interrupts interrupt; // instancia as interrupcoes
 		private InterruptHandler interruptHandler;
@@ -73,11 +76,12 @@ public class Sistema {
 			this.trapHandler = trapHandler;
 		}
 
-		public void setContext(int _pc, int minimumMemory, int maximumMemory) { // no futuro esta funcao vai ter que ser
+		public void setContext(int _pc, int minimumMemory, int maximumMemory, int[] pageTable) { // no futuro esta funcao vai ter que ser
 			pc = _pc; // limite e pc (deve ser zero nesta versao)
 			interrupt = Interrupts.interruptNone;
 			this.minimumMemory = minimumMemory;
 			this.maximumMemory = maximumMemory;
+			this.pageTable = pageTable;
 		}
 
 		private boolean valid(int address) {
@@ -88,12 +92,26 @@ public class Sistema {
 			return true;
 		}
 
+		public int translateLogicAddress(int address) {
+			int destinationPage = address/pageSize;
+			int destinationOffset = address%pageSize;
+			int physicalMemoryAddress;
+			try {
+				physicalMemoryAddress = pageTable[destinationPage]*pageSize+destinationOffset;
+				            		  //(           FRAME        )*pageSize  + offset
+			} catch(IndexOutOfBoundsException e) {
+				interrupt = Interrupts.interruptInvalidPaging;
+				return -1;
+			}
+			return physicalMemoryAddress;
+		}
+
 		public void run() { // execucao da CPU supoe que o contexto da CPU, vide acima, esta devidamente
 							// setado
 			while (true) { // ciclo de instrucoes. acaba cfe instrucao, veja cada caso.
 				// FETCH
-				if (valid(pc)) {
-					ir = m[pc]; // busca posicao da memoria apontada por pc, guarda em ir
+				if (valid(translateLogicAddress(pc))) {
+					ir = m[translateLogicAddress(pc)]; // busca posicao da memoria apontada por pc, guarda em ir
 					// EXECUTA INSTRUCAO NO ir
 					switch (ir.opc) { // para cada opcode, sua execução
 
@@ -103,14 +121,14 @@ public class Sistema {
 						break;
 
 					case STD: // [A] ← Rs
-						if (!valid(ir.p)) { 
+						if (!valid(translateLogicAddress(ir.p))) { 
 							interrupt = Interrupts.interruptInvalidAddress;
 							break; 
 							// infelizmente nao podemos deixar executar o caso para tratar a interrupcao depois apenas, pois o 
 							// java ira dar excecao e ira parar
 						}
-						m[ir.p].opc = Opcode.DATA;
-						m[ir.p].p = reg[ir.r1];
+						m[translateLogicAddress(ir.p)].opc = Opcode.DATA;
+						m[translateLogicAddress(ir.p)].p = reg[ir.r1];
 						pc++;
 						break;
 
@@ -133,11 +151,11 @@ public class Sistema {
 						break;
 
 					case STX: // [Rd] ←Rs
-						if (!valid(reg[ir.r1])) {
+						if (!valid(translateLogicAddress(reg[ir.r1]))) {
 							interrupt = Interrupts.interruptInvalidAddress;
 						}
-						m[reg[ir.r1]].opc = Opcode.DATA;
-						m[reg[ir.r1]].p = reg[ir.r2];
+						m[translateLogicAddress(reg[ir.r1])].opc = Opcode.DATA;
+						m[translateLogicAddress(reg[ir.r1])].p = reg[ir.r2];
 						pc++;
 						break;
 
@@ -194,6 +212,7 @@ public class Sistema {
 		public Word[] m;
 		public CPU cpu;
 		public MemoryManager memoryManager;
+		public ProcessManager processManager;
 
 		public VM(InterruptHandler interruptHandler, TrapHandler trapHandler) { // vm deve ser configurada com endereço
 																				// de tratamento de interrupcoes
@@ -207,10 +226,11 @@ public class Sistema {
 			// cpu
 			cpu = new CPU(m, interruptHandler, trapHandler);
 
-			cpu.maximumMemory = tamMem;
+			cpu.maximumMemory = tamMem - 1;
 			cpu.minimumMemory = 0;
 
-			memoryManager = new MemoryManager(cpu.m);
+			memoryManager = new MemoryManager(cpu);
+			processManager = new ProcessManager(cpu, memoryManager);
 		}
 	}
 	// ------------------- V M - fim
@@ -228,11 +248,11 @@ public class Sistema {
 
 	public class ProcessManager {
 
-		public class Process {
+		public class ProcessControlBlock {
 			int id;
 			int[] memoryPages;
 
-			public Process(int id, int[] memoryPages) {
+			public ProcessControlBlock(int id, int[] memoryPages) {
 				this.id = id;
 				this.memoryPages = memoryPages;
 			}
@@ -241,7 +261,7 @@ public class Sistema {
 		private int currentProcessIdentifier = 0;
 		private CPU cpu;
 		private MemoryManager memoryManager;
-		private ArrayList<Process> processList = new ArrayList<>();
+		private ArrayList<ProcessControlBlock> processList = new ArrayList<>();
 
 		public ProcessManager(CPU cpu, MemoryManager memoryManager) {
 			this.cpu = cpu;
@@ -254,46 +274,72 @@ public class Sistema {
 		public boolean createProcess(Word[] program) {
 			int[] memoryPages = memoryManager.alloc(program); // tries to allocate the program in the memory
 			if(memoryPages == null) return false; // couldn't allocate program
-			Process newProcess = new Process(currentProcessIdentifier, memoryPages);
+			ProcessControlBlock newProcess = new ProcessControlBlock(currentProcessIdentifier, memoryPages);
 			processList.add(newProcess);
+			currentProcessIdentifier++;
 			return true;
 		}
 
+		//run processs by order
 		public boolean runProcess() {
+			ProcessControlBlock currentProcess;
 			try {
-				Process currentProcess = processList.get(0);
+				currentProcess = processList.get(0);
 			} catch(IndexOutOfBoundsException e){
-				// no processes waiting
+				// no processes to run
 				return false;
 			}
-			//cpu.run(currentProcess.memoryPages);
+			cpu.setContext(0, cpu.minimumMemory, cpu.maximumMemory, currentProcess.memoryPages);
+			cpu.run();
+			return true;
+		}
+		
+		//run specific process
+		public boolean runProcess(int id) {
+			ProcessControlBlock currentProcess;
+			try {
+				currentProcess = processList.get(id);
+			} catch(IndexOutOfBoundsException e){
+				// invalid process id
+				return false;
+			}
+			cpu.setContext(0, cpu.minimumMemory, cpu.maximumMemory, currentProcess.memoryPages);
+			cpu.run();
+			return true;
+		}
+
+		// killProcess function
+		// success: true
+		// failed: false
+		public boolean killProcess(int id) {
+			ProcessControlBlock currentProcess;
+			try {
+				currentProcess = processList.get(id);
+			} catch(IndexOutOfBoundsException e){
+				// invalid process id
+				return false;
+			}
+			memoryManager.free(currentProcess.memoryPages);
+			processList.remove(currentProcess);
 			return true;
 		}
 
 	}
 
 	public class MemoryManager {
-		final int pageSize = 16; // you may configure the pageSize here
-		
-		private Word[] memory;
+		private CPU cpu;
 		int availableFrames;
 		int totalFrames;
 		int allocatedFrames = 0;
 		private Boolean[] memoryMap;
 
-		public MemoryManager(Word[] memory) {
-			this.memory = memory;
-			availableFrames = memory.length/pageSize;
+		public MemoryManager(CPU cpu) {
+			this.cpu = cpu;
+			availableFrames = cpu.m.length/cpu.pageSize;
 			totalFrames = availableFrames;
 			memoryMap = new Boolean[availableFrames];
 			for(int i = 0; i<availableFrames; i++) {
 				memoryMap[i] = false;
-
-				////////////////////////////////////////////////////////////////////////////////////
-				if(i == 1) {
-					memoryMap[i] = true;//   TESTE      ////////////////////////////////////////////
-				}
-				////////////////////////////////////////////////////////////////////////////////////
 			}
 		}
 
@@ -319,7 +365,7 @@ public class Sistema {
 			if (availableFrames==0) return null; // no available memory
 
 			// calculates how many frames we need
-			int neededFrames = (int)Math.ceil((double)words.length/(double)pageSize);
+			int neededFrames = (int)Math.ceil((double)words.length/(double)cpu.pageSize);
 
 			// check if we have enough frames
 			if (neededFrames<=availableFrames) {
@@ -337,16 +383,16 @@ public class Sistema {
 					int frame = findAvailableFrame(); 
 
 					// fills appropriate memory position with data
-					for(int frameOffset = 0; frameOffset<pageSize; frameOffset++) {
+					for(int frameOffset = 0; frameOffset<cpu.pageSize; frameOffset++) {
 						if(lastInsertedIndex+frameOffset>=words.length) {
 							break;
 						}
-						memory[frame*pageSize+frameOffset].opc = words[lastInsertedIndex+frameOffset].opc;
-						memory[frame*pageSize+frameOffset].r1 = words[lastInsertedIndex+frameOffset].r1;
-						memory[frame*pageSize+frameOffset].r2 = words[lastInsertedIndex+frameOffset].r2;
-						memory[frame*pageSize+frameOffset].p = words[lastInsertedIndex+frameOffset].p;
+						cpu.m[frame*cpu.pageSize+frameOffset].opc = words[lastInsertedIndex+frameOffset].opc;
+						cpu.m[frame*cpu.pageSize+frameOffset].r1 = words[lastInsertedIndex+frameOffset].r1;
+						cpu.m[frame*cpu.pageSize+frameOffset].r2 = words[lastInsertedIndex+frameOffset].r2;
+						cpu.m[frame*cpu.pageSize+frameOffset].p = words[lastInsertedIndex+frameOffset].p;
 					}
-					lastInsertedIndex = lastInsertedIndex + pageSize; // controls the iteration of the words(data)
+					lastInsertedIndex = lastInsertedIndex + cpu.pageSize; // controls the iteration of the words(data)
 					memoryMap[frame] = true; // frame is now occupied
 					frames[currentNewFrame] = frame; // stores frame id
 					availableFrames--;
@@ -372,20 +418,7 @@ public class Sistema {
 				}
 			}
 		}
-
-		public int accessAddress(int address, int[] frames) {
-			int destinationPage = address/pageSize;
-			int destinationOffset = address%pageSize;
-			int physicalMemoryAddress;
-			try {
-				physicalMemoryAddress = frames[destinationPage]*pageSize+destinationOffset;
-			} catch(IndexOutOfBoundsException e) {
-				// invalid destination page
-				return -1;
-			}
-			return physicalMemoryAddress;
-		}
-
+	
 	}
 
 	public class InterruptHandler {
@@ -448,8 +481,8 @@ public class Sistema {
 	public static void main(String args[]) {
 		// PROGRAMA NORMAL FIBONACCI
 
-		// Sistema s = new Sistema();
-		// s.test1();
+		Sistema s = new Sistema();
+		s.test1();
 
 		// PROGRAMA INTERRUPÇÃO ENDEREÇO INVÁLIDO
 
@@ -478,8 +511,8 @@ public class Sistema {
 
 		// PROGRAMA TESTE MEMORY MANAGER
 
-		Sistema s = new Sistema();
-		s.programTestMemManager();
+		// Sistema s = new Sistema();
+		// s.programTestMemManager();
 	}
 	// -------------------------------------------------------------------------------------------------------
 	// --------------- TUDO ABAIXO DE MAIN É AUXILIAR PARA FUNCIONAMENTO DO SISTEMA
@@ -490,109 +523,103 @@ public class Sistema {
 
 	public void test1() {
 		Aux aux = new Aux();
-		Word[] p = new Programas().fibonacci10;
-		aux.carga(p, vm.m);
-		vm.cpu.setContext(0, 0, vm.tamMem - 1);
+		Word[] program = new Programas().fibonacci10;
+		
 		System.out.println("---------------------------------- programa carregado ");
-		aux.dump(vm.m, 0, 33);
+		vm.processManager.createProcess(program);
+		aux.dump(vm.m, 0, 32);
 		System.out.println("---------------------------------- após execucao ");
-		vm.cpu.run();
-		aux.dump(vm.m, 0, 33);
+		vm.processManager.runProcess();
+		aux.dump(vm.m, 0, 32);
 	}
-
-	// public void test2(){
-	// Aux aux = new Aux();
-	// Word[] p = new Programas().progMinimo;
-	// aux.carga(p, vm.m);
-	// vm.cpu.setContext(0, 0, vm.tamMem - 1);
-	// System.out.println("---------------------------------- programa carregado ");
-	// aux.dump(vm.m, 0, 15);
-	// System.out.println("---------------------------------- após execucao ");
-	// vm.cpu.run();
-	// aux.dump(vm.m, 0, 15);
-	// }
 
 	public void errorMemory() {
 		Aux aux = new Aux();
-		Word[] p = new Programas().programab;
-		aux.carga(p, vm.m);
-		// vm.cpu.setContext(0, vm.tamMem - 1, 0);
-		vm.cpu.setContext(0, 0, vm.tamMem - 1);
+		Word[] program = new Programas().programab;
+
 		System.out.println("---------------------------------- programa carregado ");
-		aux.dump(vm.m, 0, 30);
-		//System.out.println("---------------------------------- após execucao ");
-		vm.cpu.run();
-		//aux.dump(vm.m, 0, vm.tamMem);
+		vm.processManager.createProcess(program);
+		aux.dump(vm.m, 0, 32);
+		System.out.println("---------------------------------- após execucao ");
+		vm.processManager.runProcess();
+		aux.dump(vm.m, 0, 32);
 	}
 
 	public void programTestTrapInput() {
 		Aux aux = new Aux();
-		Word[] p = new Programas().programTestTrapInput;
-		aux.carga(p, vm.m);
-		vm.cpu.setContext(0, 0, vm.tamMem - 1);
+		Word[] program = new Programas().programTestTrapInput;
+		
 		System.out.println("---------------------------------- programa carregado ");
+		vm.processManager.createProcess(program);
 		aux.dump(vm.m, 0, 10);
 		System.out.println("---------------------------------- após execucao ");
-		vm.cpu.run();
+		vm.processManager.runProcess();
 		aux.dump(vm.m, 0, 10);
 	}
 
 	public void programTestTrapOutput() {
 		Aux aux = new Aux();
-		Word[] p = new Programas().programTestTrapOutput;
-		aux.carga(p, vm.m);
-		vm.cpu.setContext(0, 0, vm.tamMem - 1);
+		Word[] program = new Programas().programTestTrapOutput;
+		
 		System.out.println("---------------------------------- programa carregado ");
+		vm.processManager.createProcess(program);
 		aux.dump(vm.m, 0, 10);
 		System.out.println("---------------------------------- após execucao ");
-		vm.cpu.run();
+		vm.processManager.runProcess();
 		aux.dump(vm.m, 0, 10);
 	}
 
 	public void programTestInvalidInstruction() {
 		Aux aux = new Aux();
-		Word[] p = new Programas().programTestInvalidInstruction;
-		aux.carga(p, vm.m);
-		vm.cpu.setContext(0, 0, vm.tamMem - 1);
+		Word[] program = new Programas().programTestInvalidInstruction;
+		
 		System.out.println("---------------------------------- programa carregado ");
+		vm.processManager.createProcess(program);
 		aux.dump(vm.m, 0, 10);
 		System.out.println("---------------------------------- após execucao ");
-		vm.cpu.run();
+		vm.processManager.runProcess();
 		aux.dump(vm.m, 0, 10);
 	}
 
 	public void programTestOverflow() {
 		Aux aux = new Aux();
-		Word[] p = new Programas().programTestOverflow;
-		aux.carga(p, vm.m);
-		vm.cpu.setContext(0, 0, vm.tamMem - 1);
+		Word[] program = new Programas().programTestOverflow;
+		
 		System.out.println("---------------------------------- programa carregado ");
+		vm.processManager.createProcess(program);
 		aux.dump(vm.m, 0, 10);
 		System.out.println("---------------------------------- após execucao ");
-		vm.cpu.run();
+		vm.processManager.runProcess();
 		aux.dump(vm.m, 0, 10);
 	}
 
 	public void programTestMemManager() {
 		Aux aux = new Aux();
-		Word[] p = new Programas().data;
-		// aux.carga(p, vm.m);
-		int[] frames = vm.memoryManager.alloc(p);
-		/*
-		boolean status = vm.processManager.createProcess(program);
+		Word[] program;
+		boolean status;
+
+		program = new Programas().data1;
+		status = vm.processManager.createProcess(program);
 		System.out.println("new process successful? "+ status);
-		*/
+
+		program = new Programas().data2;
+		status = vm.processManager.createProcess(program);
+		System.out.println("new process successful? "+ status);
+
 		aux.dump(vm.m, 0, 64);
-		System.out.println(frames.length);
-		System.out.println(frames[0]);
-		System.out.println(frames[1]);
-		System.out.println(frames[2]);
-		// vm.cpu.setContext(0, 0, vm.tamMem - 1);
-		// System.out.println("---------------------------------- programa carregado ");
-		// aux.dump(vm.m, 0, 10);
-		// System.out.println("---------------------------------- após execucao ");
-		// vm.cpu.run();
-		// aux.dump(vm.m, 0, 10);
+
+		// keep in mind that memory is only MARKED as free, its not overwritten with empty data
+		vm.processManager.killProcess(1);
+
+		program = new Programas().data3;
+		status = vm.processManager.createProcess(program);
+		System.out.println("new process successful? "+ status);
+
+		program = new Programas().data2;
+		status = vm.processManager.createProcess(program);
+		System.out.println("new process successful? "+ status);
+
+		aux.dump(vm.m, 0, 128);
 	}
 
 	// ------------------------------------------- classes e funcoes auxiliares
@@ -729,41 +756,108 @@ public class Sistema {
 
 			new Word(Opcode.DATA, 50, -1, 1) };
 
-		public Word[] data = new Word[] { // dados
-			new Word(Opcode.LDI, 1, -1, 0), 
-			new Word(Opcode.STD, 1, -1, 20), // 50
-			new Word(Opcode.LDI, 2, -1, 1), 
-			new Word(Opcode.STD, 2, -1, 21), // 51
-			new Word(Opcode.LDI, 0, -1, 22), // 52
-			new Word(Opcode.LDI, 6, -1, 6), 
-			new Word(Opcode.LDI, 7, -1, 31), // 61
-			new Word(Opcode.LDI, 3, -1, 0), 
-			new Word(Opcode.ADD, 3, 1, -1), 
-			new Word(Opcode.LDI, 1, -1, 0),
-			new Word(Opcode.ADD, 1, 2, -1), 
-			new Word(Opcode.ADD, 2, 3, -1), 
-			new Word(Opcode.STX, 0, 2, -1),
-			new Word(Opcode.ADDI, 0, -1, 1), 
-			new Word(Opcode.SUB, 7, 0, -1), 
-			new Word(Opcode.JMPIG, 6, 7, -1),
-			new Word(Opcode.STOP, -1, -1, -1),
-			new Word(Opcode.LDI, 1, -1, 0), 
-			new Word(Opcode.STD, 1, -1, 20), // 50
-			new Word(Opcode.LDI, 2, -1, 1), 
-			new Word(Opcode.STD, 2, -1, 21), // 51
-			new Word(Opcode.LDI, 0, -1, 22), // 52
-			new Word(Opcode.LDI, 6, -1, 6), 
-			new Word(Opcode.LDI, 7, -1, 31), // 61
-			new Word(Opcode.LDI, 3, -1, 0), 
-			new Word(Opcode.ADD, 3, 1, -1), 
-			new Word(Opcode.LDI, 1, -1, 0),
-			new Word(Opcode.ADD, 1, 2, -1), 
-			new Word(Opcode.ADD, 2, 3, -1), 
-			new Word(Opcode.STX, 0, 2, -1),
-			new Word(Opcode.ADDI, 0, -1, 1), 
-			new Word(Opcode.SUB, 7, 0, -1), 
-			new Word(Opcode.JMPIG, 6, 7, -1),
-			new Word(Opcode.STOP, -1, -1, -1) };
+		public Word[] data1 = new Word[] { // data1 for testing
+			new Word(Opcode.DATA, 1, -1, 1),
+			new Word(Opcode.DATA, 1, -1, 1),
+			new Word(Opcode.DATA, 1, -1, 1),
+			new Word(Opcode.DATA, 1, -1, 1),
+			new Word(Opcode.DATA, 1, -1, 1),
+			new Word(Opcode.DATA, 1, -1, 1),
+			new Word(Opcode.DATA, 1, -1, 1),
+			new Word(Opcode.DATA, 1, -1, 1),
+			new Word(Opcode.DATA, 1, -1, 1),
+			new Word(Opcode.DATA, 1, -1, 1),
+			new Word(Opcode.DATA, 1, -1, 1),
+			new Word(Opcode.DATA, 1, -1, 1),
+			new Word(Opcode.DATA, 1, -1, 1),
+			new Word(Opcode.DATA, 1, -1, 1),
+			new Word(Opcode.DATA, 1, -1, 1),
+			new Word(Opcode.DATA, 1, -1, 1),
+			new Word(Opcode.DATA, 1, -1, 1),
+			new Word(Opcode.DATA, 1, -1, 1),
+			new Word(Opcode.DATA, 1, -1, 1),
+			new Word(Opcode.DATA, 1, -1, 1),
+			new Word(Opcode.DATA, 1, -1, 1),
+			new Word(Opcode.DATA, 1, -1, 1),
+			new Word(Opcode.DATA, 1, -1, 1),
+			new Word(Opcode.DATA, 1, -1, 1),
+			new Word(Opcode.DATA, 1, -1, 1),
+			new Word(Opcode.DATA, 1, -1, 1),
+			new Word(Opcode.DATA, 1, -1, 1),
+			new Word(Opcode.DATA, 1, -1, 1),
+			new Word(Opcode.DATA, 1, -1, 1),
+			new Word(Opcode.DATA, 1, -1, 1),
+			new Word(Opcode.DATA, 1, -1, 1),
+			new Word(Opcode.DATA, 1, -1, 1)};
+
+		public Word[] data2 = new Word[] { // data2 for testing
+			new Word(Opcode.DATA, 2, -1, 1),
+			new Word(Opcode.DATA, 2, -1, 1),
+			new Word(Opcode.DATA, 2, -1, 1),
+			new Word(Opcode.DATA, 2, -1, 1),
+			new Word(Opcode.DATA, 2, -1, 1),
+			new Word(Opcode.DATA, 2, -1, 1),
+			new Word(Opcode.DATA, 2, -1, 1),
+			new Word(Opcode.DATA, 2, -1, 1),
+			new Word(Opcode.DATA, 2, -1, 1),
+			new Word(Opcode.DATA, 2, -1, 1),
+			new Word(Opcode.DATA, 2, -1, 1),
+			new Word(Opcode.DATA, 2, -1, 1),
+			new Word(Opcode.DATA, 2, -1, 1),
+			new Word(Opcode.DATA, 2, -1, 1),
+			new Word(Opcode.DATA, 2, -1, 1),
+			new Word(Opcode.DATA, 2, -1, 1),
+			new Word(Opcode.DATA, 2, -1, 1),
+			new Word(Opcode.DATA, 2, -1, 1),
+			new Word(Opcode.DATA, 2, -1, 1),
+			new Word(Opcode.DATA, 2, -1, 1),
+			new Word(Opcode.DATA, 2, -1, 1),
+			new Word(Opcode.DATA, 2, -1, 1),
+			new Word(Opcode.DATA, 2, -1, 1),
+			new Word(Opcode.DATA, 2, -1, 1),
+			new Word(Opcode.DATA, 2, -1, 1),
+			new Word(Opcode.DATA, 2, -1, 1),
+			new Word(Opcode.DATA, 2, -1, 1),
+			new Word(Opcode.DATA, 2, -1, 1),
+			new Word(Opcode.DATA, 2, -1, 1),
+			new Word(Opcode.DATA, 2, -1, 1),
+			new Word(Opcode.DATA, 2, -1, 1),
+			new Word(Opcode.DATA, 2, -1, 1)};
+
+		public Word[] data3 = new Word[] { // data3 for testing
+			new Word(Opcode.DATA, 3, -1, 1),
+			new Word(Opcode.DATA, 3, -1, 1),
+			new Word(Opcode.DATA, 3, -1, 1),
+			new Word(Opcode.DATA, 3, -1, 1),
+			new Word(Opcode.DATA, 3, -1, 1),
+			new Word(Opcode.DATA, 3, -1, 1),
+			new Word(Opcode.DATA, 3, -1, 1),
+			new Word(Opcode.DATA, 3, -1, 1),
+			new Word(Opcode.DATA, 3, -1, 1),
+			new Word(Opcode.DATA, 3, -1, 1),
+			new Word(Opcode.DATA, 3, -1, 1),
+			new Word(Opcode.DATA, 3, -1, 1),
+			new Word(Opcode.DATA, 3, -1, 1),
+			new Word(Opcode.DATA, 3, -1, 1),
+			new Word(Opcode.DATA, 3, -1, 1),
+			new Word(Opcode.DATA, 3, -1, 1),
+			new Word(Opcode.DATA, 3, -1, 1),
+			new Word(Opcode.DATA, 3, -1, 1),
+			new Word(Opcode.DATA, 3, -1, 1),
+			new Word(Opcode.DATA, 3, -1, 1),
+			new Word(Opcode.DATA, 3, -1, 1),
+			new Word(Opcode.DATA, 3, -1, 1),
+			new Word(Opcode.DATA, 3, -1, 1),
+			new Word(Opcode.DATA, 3, -1, 1),
+			new Word(Opcode.DATA, 3, -1, 1),
+			new Word(Opcode.DATA, 3, -1, 1),
+			new Word(Opcode.DATA, 3, -1, 1),
+			new Word(Opcode.DATA, 3, -1, 1),
+			new Word(Opcode.DATA, 3, -1, 1),
+			new Word(Opcode.DATA, 3, -1, 1),
+			new Word(Opcode.DATA, 3, -1, 1),
+			new Word(Opcode.DATA, 3, -1, 1)};
+
 
 	}
 
