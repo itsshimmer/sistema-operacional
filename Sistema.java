@@ -179,7 +179,7 @@ public class Sistema {
 							}
 							break;
 
-						case STOP: // por enquanto, para execucao
+						case STOP: // chama o scheduler ao terminar execucao
 							interrupt = Interrupts.interruptStop;
 							break;
 
@@ -192,6 +192,11 @@ public class Sistema {
 							interrupt = Interrupts.interruptInvalidInstruction;
 							break;
 
+					}
+					schedulerClock++;
+					if(schedulerClock >= schedulerLimit) {
+						schedulerClock = 0;
+						interrupt = Interrupts.interruptScheduler;
 					}
 				}
 				// VERIFICA INTERRUPÇÃO !!! - TERCEIRA FASE DO CICLO DE INSTRUÇÕES
@@ -301,6 +306,7 @@ public class Sistema {
 			}
 			cpu.setContext(0, cpu.minimumMemory, cpu.maximumMemory, currentProcess.memoryPages);
 			runningProcess = currentProcess;
+			processList.remove(runningProcess);
 			cpu.run();
 			return true;
 		}
@@ -336,9 +342,17 @@ public class Sistema {
 		}
 
 		public void scheduler() {
-			// cpu.currentProcess.reg = cpu.reg;
-			// cpu.currentProcess.pc = cpu.pc;
+			runningProcess.reg = cpu.reg;
+			runningProcess.pc = cpu.pc;
+			processList.add(runningProcess);
+			runningProcess = processList.get(0);
 
+			cpu.pc = runningProcess.pc;
+			cpu.reg = runningProcess.reg;
+			cpu.pageTable = runningProcess.memoryPages;
+			cpu.interrupt = Interrupts.interruptNone;
+
+			cpu.run();
 		}
 
 
@@ -451,7 +465,7 @@ public class Sistema {
 		public void handle(Interrupts interrupt) {
 			System.out.println("A interruption has just happened! " + interrupt);
 			if(interrupt == Interrupts.interruptScheduler) {
-				//vm.processManager.scheduler();
+				vm.processManager.scheduler();
 			}
 		}
 
@@ -702,26 +716,12 @@ public class Sistema {
 		status = vm.processManager.createProcess(program);
 		System.out.println("new process successful? "+ status);
 
-		program = new Programas().data1;
-		status = vm.processManager.createProcess(program);
-		System.out.println("new process successful? "+ status);
-
-		status = vm.processManager.createProcess(program);
-		System.out.println("new process successful? "+ status);
-
-		vm.processManager.killProcess(1);
-
-		program = new Programas().fibonacci10;
-		status = vm.processManager.createProcess(program);
-		System.out.println("new process successful? "+ status);
-
-		vm.processManager.killProcess(1);		
-
-		aux.dump(vm.m, 0, 128);
+		aux.dump(vm.m, 0, 40);
 
 		vm.processManager.run();
+
 		System.out.println("----------------------------- after run all");
-		aux.dump(vm.m, 0, 128);
+		aux.dump(vm.m, 0, 40);
 	}
 
 	// ------------------------------------------- classes e funcoes auxiliares
