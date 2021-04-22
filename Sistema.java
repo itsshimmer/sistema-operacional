@@ -37,7 +37,7 @@ public class Sistema {
 	// -----------------------------------------------------
 
 	public enum Interrupts {
-		interruptNone, interruptInvalidInstruction, interruptInvalidAddress, interruptOverflow, interruptInvalidPaging, interruptStop;
+		interruptNone, interruptInvalidInstruction, interruptInvalidAddress, interruptOverflow, interruptInvalidPaging, interruptScheduler, interruptStop;
 	}
 
 	public enum Opcode {
@@ -53,6 +53,9 @@ public class Sistema {
 		private int pc; // ... composto de program counter,
 		private Word ir; // instruction register,
 		private int[] reg; // registradores da CPU
+
+		final private int schedulerLimit = 5;
+		private int schedulerClock = 0;
 
 		private int[] pageTable;
 		final int pageSize = 16; // you may configure the pageSize here
@@ -115,79 +118,79 @@ public class Sistema {
 					// EXECUTA INSTRUCAO NO ir
 					switch (ir.opc) { // para cada opcode, sua execução
 
-					case LDI: // Rd ← k
-						reg[ir.r1] = ir.p;
-						pc++;
-						break;
-
-					case STD: // [A] ← Rs
-						if (!valid(translateLogicAddress(ir.p))) { 
-							interrupt = Interrupts.interruptInvalidAddress;
-							break; 
-							// infelizmente nao podemos deixar executar o caso para tratar a interrupcao depois apenas, pois o 
-							// java ira dar excecao e ira parar
-						}
-						m[translateLogicAddress(ir.p)].opc = Opcode.DATA;
-						m[translateLogicAddress(ir.p)].p = reg[ir.r1];
-						pc++;
-						break;
-
-					case ADD: // Rd ← Rd + Rs
-						try {
-							reg[ir.r1] = Math.addExact(reg[ir.r1], reg[ir.r2]);
-						} catch(ArithmeticException e){
-							interrupt = Interrupts.interruptOverflow;
-						}	
-						pc++;
-						break;
-
-					case ADDI: // Rd ← Rd + k
-						try {
-							reg[ir.r1] = Math.addExact(reg[ir.r1], ir.p);
-						} catch(ArithmeticException e){
-							interrupt = Interrupts.interruptOverflow;
-						}			
-						pc++;
-						break;
-
-					case STX: // [Rd] ←Rs
-						if (!valid(translateLogicAddress(reg[ir.r1]))) {
-							interrupt = Interrupts.interruptInvalidAddress;
-						}
-						m[translateLogicAddress(reg[ir.r1])].opc = Opcode.DATA;
-						m[translateLogicAddress(reg[ir.r1])].p = reg[ir.r2];
-						pc++;
-						break;
-
-					case SUB: // Rd ← Rd - Rs
-						try { 
-							reg[ir.r1] = reg[ir.r1] - reg[ir.r2];
-						} catch(StackOverflowError e){
-							interrupt = Interrupts.interruptOverflow;
-						}			
-						pc++;
-						break;
-
-					case JMPIG: // If Rc > 0 Then PC ← Rs Else PC ← PC +1
-						if (reg[ir.r2] > 0) {
-							pc = reg[ir.r1];
-						} else {
+						case LDI: // Rd ← k
+							reg[ir.r1] = ir.p;
 							pc++;
-						}
-						break;
+							break;
 
-					case STOP: // por enquanto, para execucao
-						interrupt = Interrupts.interruptStop;
-						break;
+						case STD: // [A] ← Rs
+							if (!valid(translateLogicAddress(ir.p))) { 
+								interrupt = Interrupts.interruptInvalidAddress;
+								break; 
+								// infelizmente nao podemos deixar executar o caso para tratar a interrupcao depois apenas, pois o 
+								// java ira dar excecao e ira parar
+							}
+							m[translateLogicAddress(ir.p)].opc = Opcode.DATA;
+							m[translateLogicAddress(ir.p)].p = reg[ir.r1];
+							pc++;
+							break;
 
-					case TRAP:
-						trapHandler.trap(this);
-						pc++;
-						break;
+						case ADD: // Rd ← Rd + Rs
+							try {
+								reg[ir.r1] = Math.addExact(reg[ir.r1], reg[ir.r2]);
+							} catch(ArithmeticException e){
+								interrupt = Interrupts.interruptOverflow;
+							}	
+							pc++;
+							break;
 
-					default:
-						interrupt = Interrupts.interruptInvalidInstruction;
-						break;
+						case ADDI: // Rd ← Rd + k
+							try {
+								reg[ir.r1] = Math.addExact(reg[ir.r1], ir.p);
+							} catch(ArithmeticException e){
+								interrupt = Interrupts.interruptOverflow;
+							}			
+							pc++;
+							break;
+
+						case STX: // [Rd] ←Rs
+							if (!valid(translateLogicAddress(reg[ir.r1]))) {
+								interrupt = Interrupts.interruptInvalidAddress;
+							}
+							m[translateLogicAddress(reg[ir.r1])].opc = Opcode.DATA;
+							m[translateLogicAddress(reg[ir.r1])].p = reg[ir.r2];
+							pc++;
+							break;
+
+						case SUB: // Rd ← Rd - Rs
+							try { 
+								reg[ir.r1] = reg[ir.r1] - reg[ir.r2];
+							} catch(StackOverflowError e){
+								interrupt = Interrupts.interruptOverflow;
+							}			
+							pc++;
+							break;
+
+						case JMPIG: // If Rc > 0 Then PC ← Rs Else PC ← PC +1
+							if (reg[ir.r2] > 0) {
+								pc = reg[ir.r1];
+							} else {
+								pc++;
+							}
+							break;
+
+						case STOP: // por enquanto, para execucao
+							interrupt = Interrupts.interruptStop;
+							break;
+
+						case TRAP:
+							trapHandler.trap(this);
+							pc++;
+							break;
+
+						default:
+							interrupt = Interrupts.interruptInvalidInstruction;
+							break;
 
 					}
 				}
@@ -246,18 +249,20 @@ public class Sistema {
 	// ------------------- S O F T W A R E - inicio
 	// ----------------------------------------------------------
 
-	public class ProcessManager {
+	public class ProcessControlBlock {
+		int id;
+		int[] memoryPages;
+		int pc;
+		int[] reg;
 
-		public class ProcessControlBlock {
-			int id;
-			int[] memoryPages;
-
-			public ProcessControlBlock(int id, int[] memoryPages) {
-				this.id = id;
-				this.memoryPages = memoryPages;
-			}
+		public ProcessControlBlock(int id, int[] memoryPages) {
+			this.id = id;
+			this.memoryPages = memoryPages;
 		}
-
+	}
+	
+	public class ProcessManager {
+		private ProcessControlBlock runningProcess;
 		private int currentProcessIdentifier = 0;
 		private CPU cpu;
 		private MemoryManager memoryManager;
@@ -273,8 +278,12 @@ public class Sistema {
 		// failed: false
 		public boolean createProcess(Word[] program) {
 			int[] memoryPages = memoryManager.alloc(program); // tries to allocate the program in the memory
+			if(memoryPages == null) {
+				System.out.println("ProcessManager.createProcess: couldn't allocate program");	
 			System.out.println("ProcessManager.createProcess: couldn't allocate program");
-			if(memoryPages == null) return false; // couldn't allocate program
+				System.out.println("ProcessManager.createProcess: couldn't allocate program");	
+				return false; // couldn't allocate program
+			}
 			ProcessControlBlock newProcess = new ProcessControlBlock(currentProcessIdentifier, memoryPages);
 			processList.add(newProcess);
 			currentProcessIdentifier++;
@@ -282,7 +291,7 @@ public class Sistema {
 		}
 
 		//run processs by order
-		public boolean runProcess() {
+		public boolean run() {
 			ProcessControlBlock currentProcess;
 			try {
 				currentProcess = processList.get(0);
@@ -291,6 +300,7 @@ public class Sistema {
 				return false;
 			}
 			cpu.setContext(0, cpu.minimumMemory, cpu.maximumMemory, currentProcess.memoryPages);
+			runningProcess = currentProcess;
 			cpu.run();
 			return true;
 		}
@@ -324,6 +334,13 @@ public class Sistema {
 			processList.remove(currentProcess);
 			return true;
 		}
+
+		public void scheduler() {
+			// cpu.currentProcess.reg = cpu.reg;
+			// cpu.currentProcess.pc = cpu.pc;
+
+		}
+
 
 	}
 
@@ -431,8 +448,11 @@ public class Sistema {
 
 	public class InterruptHandler {
 
-		public void handle(Interrupts interrupts) {
-			System.out.println("A interruption has just happened! " + interrupts);
+		public void handle(Interrupts interrupt) {
+			System.out.println("A interruption has just happened! " + interrupt);
+			if(interrupt == Interrupts.interruptScheduler) {
+				//vm.processManager.scheduler();
+			}
 		}
 
 	}
@@ -489,8 +509,8 @@ public class Sistema {
 	public static void main(String args[]) {
 		// PROGRAMA NORMAL FIBONACCI
 
-		Sistema s = new Sistema();
-		s.test1();
+		// Sistema s = new Sistema();
+		// s.test1();
 
 		// PROGRAMA INTERRUPÇÃO ENDEREÇO INVÁLIDO
 
@@ -521,6 +541,16 @@ public class Sistema {
 
 		// Sistema s = new Sistema();
 		// s.programTestMemManager();
+
+		// PROGRAM TEST RUN ALL
+		
+		// Sistema s = new Sistema();
+		// s.programTestRunAll();
+
+		// PROGRAM TEST SCHEDULER
+		
+		Sistema s = new Sistema();
+		s.programTestScheduler();
 	}
 	// -------------------------------------------------------------------------------------------------------
 	// --------------- TUDO ABAIXO DE MAIN É AUXILIAR PARA FUNCIONAMENTO DO SISTEMA
@@ -537,7 +567,7 @@ public class Sistema {
 		vm.processManager.createProcess(program);
 		aux.dump(vm.m, 0, 32);
 		System.out.println("---------------------------------- após execucao ");
-		vm.processManager.runProcess();
+		vm.processManager.run();
 		aux.dump(vm.m, 0, 32);
 	}
 
@@ -549,7 +579,7 @@ public class Sistema {
 		vm.processManager.createProcess(program);
 		aux.dump(vm.m, 0, 32);
 		System.out.println("---------------------------------- após execucao ");
-		vm.processManager.runProcess();
+		vm.processManager.run();
 		aux.dump(vm.m, 0, 32);
 	}
 
@@ -561,7 +591,7 @@ public class Sistema {
 		vm.processManager.createProcess(program);
 		aux.dump(vm.m, 0, 10);
 		System.out.println("---------------------------------- após execucao ");
-		vm.processManager.runProcess();
+		vm.processManager.run();
 		aux.dump(vm.m, 0, 10);
 	}
 
@@ -573,7 +603,7 @@ public class Sistema {
 		vm.processManager.createProcess(program);
 		aux.dump(vm.m, 0, 10);
 		System.out.println("---------------------------------- após execucao ");
-		vm.processManager.runProcess();
+		vm.processManager.run();
 		aux.dump(vm.m, 0, 10);
 	}
 
@@ -585,7 +615,7 @@ public class Sistema {
 		vm.processManager.createProcess(program);
 		aux.dump(vm.m, 0, 10);
 		System.out.println("---------------------------------- após execucao ");
-		vm.processManager.runProcess();
+		vm.processManager.run();
 		aux.dump(vm.m, 0, 10);
 	}
 
@@ -597,7 +627,7 @@ public class Sistema {
 		vm.processManager.createProcess(program);
 		aux.dump(vm.m, 0, 10);
 		System.out.println("---------------------------------- após execucao ");
-		vm.processManager.runProcess();
+		vm.processManager.run();
 		aux.dump(vm.m, 0, 10);
 	}
 
@@ -614,7 +644,7 @@ public class Sistema {
 		status = vm.processManager.createProcess(program);
 		System.out.println("new process successful? "+ status);
 
-		aux.dump(vm.m, 0, 64);
+		aux.dump(vm.m, 0, 128);
 
 		// keep in mind that memory is only MARKED as free, its not overwritten with empty data
 		vm.processManager.killProcess(1);
@@ -627,6 +657,70 @@ public class Sistema {
 		status = vm.processManager.createProcess(program);
 		System.out.println("new process successful? "+ status);
 
+		aux.dump(vm.m, 0, 128);
+	}
+
+	public void programTestRunAll() {
+		Aux aux = new Aux();
+
+		Word[] program;
+		boolean status;
+
+		program = new Programas().fibonacci10;
+		status = vm.processManager.createProcess(program);
+		System.out.println("new process successful? "+ status);
+
+		program = new Programas().data1;
+		status = vm.processManager.createProcess(program);
+		System.out.println("new process successful? "+ status);
+
+		status = vm.processManager.createProcess(program);
+		System.out.println("new process successful? "+ status);
+
+		vm.processManager.killProcess(1);
+
+		program = new Programas().fibonacci10;
+		status = vm.processManager.createProcess(program);
+		System.out.println("new process successful? "+ status);
+
+		vm.processManager.killProcess(1);		
+
+		aux.dump(vm.m, 0, 128);
+
+		vm.processManager.run();
+		System.out.println("----------------------------- after run all");
+		aux.dump(vm.m, 0, 128);
+	}
+	
+	public void programTestScheduler() {
+		Aux aux = new Aux();
+
+		Word[] program;
+		boolean status;
+
+		program = new Programas().fibonacci10;
+		status = vm.processManager.createProcess(program);
+		System.out.println("new process successful? "+ status);
+
+		program = new Programas().data1;
+		status = vm.processManager.createProcess(program);
+		System.out.println("new process successful? "+ status);
+
+		status = vm.processManager.createProcess(program);
+		System.out.println("new process successful? "+ status);
+
+		vm.processManager.killProcess(1);
+
+		program = new Programas().fibonacci10;
+		status = vm.processManager.createProcess(program);
+		System.out.println("new process successful? "+ status);
+
+		vm.processManager.killProcess(1);		
+
+		aux.dump(vm.m, 0, 128);
+
+		vm.processManager.run();
+		System.out.println("----------------------------- after run all");
 		aux.dump(vm.m, 0, 128);
 	}
 
@@ -691,7 +785,23 @@ public class Sistema {
 			new Word(Opcode.ADDI, 0, -1, 1), 
 			new Word(Opcode.SUB, 7, 0, -1), 
 			new Word(Opcode.JMPIG, 6, 7, -1),
+			new Word(Opcode.STOP, -1, -1, -1), // multiple stops represt memory needed to run program
+			new Word(Opcode.STOP, -1, -1, -1),
+			new Word(Opcode.STOP, -1, -1, -1),
+			new Word(Opcode.STOP, -1, -1, -1),
+			new Word(Opcode.STOP, -1, -1, -1),
+			new Word(Opcode.STOP, -1, -1, -1),
+			new Word(Opcode.STOP, -1, -1, -1),
+			new Word(Opcode.STOP, -1, -1, -1),
+			new Word(Opcode.STOP, -1, -1, -1),
+			new Word(Opcode.STOP, -1, -1, -1),
+			new Word(Opcode.STOP, -1, -1, -1),
+			new Word(Opcode.STOP, -1, -1, -1),
+			new Word(Opcode.STOP, -1, -1, -1),
+			new Word(Opcode.STOP, -1, -1, -1),
+			new Word(Opcode.STOP, -1, -1, -1),
 			new Word(Opcode.STOP, -1, -1, -1) };
+			
 
 		// tentativa de implementação de um exercício, posteriormente usado apenas para
 		// demonstração de endereço inválido ao final
