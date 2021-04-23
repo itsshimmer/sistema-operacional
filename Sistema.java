@@ -179,7 +179,7 @@ public class Sistema {
 							}
 							break;
 
-						case STOP: // chama o scheduler ao terminar execucao
+						case STOP: 
 							interrupt = Interrupts.interruptStop;
 							break;
 
@@ -195,7 +195,6 @@ public class Sistema {
 					}
 					schedulerClock++;
 					if(schedulerClock >= schedulerLimit) {
-						schedulerClock = 0;
 						interrupt = Interrupts.interruptScheduler;
 					}
 				}
@@ -259,10 +258,14 @@ public class Sistema {
 		int[] memoryPages;
 		int pc;
 		int[] reg;
+		boolean finished;
 
 		public ProcessControlBlock(int id, int[] memoryPages) {
 			this.id = id;
 			this.memoryPages = memoryPages;
+			pc = 0;
+			reg = new int[10];
+			finished = false;
 		}
 	}
 	
@@ -297,16 +300,14 @@ public class Sistema {
 
 		//run processs by order
 		public boolean run() {
-			ProcessControlBlock currentProcess;
 			try {
-				currentProcess = processList.get(0);
+				runningProcess = processList.get(0);
+				processList.remove(runningProcess);
 			} catch(IndexOutOfBoundsException e){
 				// no processes to run
 				return false;
 			}
-			cpu.setContext(0, cpu.minimumMemory, cpu.maximumMemory, currentProcess.memoryPages);
-			runningProcess = currentProcess;
-			processList.remove(runningProcess);
+			cpu.setContext(0, cpu.minimumMemory, cpu.maximumMemory, runningProcess.memoryPages);
 			cpu.run();
 			return true;
 		}
@@ -344,15 +345,36 @@ public class Sistema {
 		public void scheduler() {
 			runningProcess.reg = cpu.reg;
 			runningProcess.pc = cpu.pc;
-			processList.add(runningProcess);
-			runningProcess = processList.get(0);
 
-			cpu.pc = runningProcess.pc;
-			cpu.reg = runningProcess.reg;
-			cpu.pageTable = runningProcess.memoryPages;
-			cpu.interrupt = Interrupts.interruptNone;
+			if(!runningProcess.finished) {
+				processList.add(runningProcess);
+			}
 
-			cpu.run();
+			if(!processList.isEmpty()) {
+				runningProcess = processList.get(0);
+				processList.remove(runningProcess);
+
+				cpu.pc = runningProcess.pc;
+				cpu.reg = runningProcess.reg;
+				cpu.pageTable = runningProcess.memoryPages;
+				cpu.interrupt = Interrupts.interruptNone;
+
+				//---------------------------------------------------SCHEDULER TEST
+				// Aux aux = new Aux();
+				// aux.dump(vm.m, 0, 128);
+				// try {
+				// 	Thread.sleep(1000);
+				// } catch (InterruptedException e) {
+				// 	e.printStackTrace();
+				// }
+				//---------------------------------------------------END SCHEDULER TEST
+				cpu.run();
+			}
+		}
+
+		public void stop() {
+			runningProcess.finished = true;
+			scheduler();
 		}
 
 
@@ -463,9 +485,23 @@ public class Sistema {
 	public class InterruptHandler {
 
 		public void handle(Interrupts interrupt) {
-			System.out.println("A interruption has just happened! " + interrupt);
-			if(interrupt == Interrupts.interruptScheduler) {
-				vm.processManager.scheduler();
+			
+			switch(interrupt) {
+				case interruptScheduler:
+					System.out.println("_interruptScheduler_");
+					vm.cpu.schedulerClock = 0;
+					vm.processManager.scheduler();
+					break;
+
+				case interruptStop:
+					System.out.println("***interruptStop***");
+					vm.cpu.schedulerClock = 0;
+					vm.processManager.stop();
+					break;
+
+				default:
+					System.out.println("A interruption has just happened! " + interrupt);
+					break;
 			}
 		}
 
@@ -707,6 +743,7 @@ public class Sistema {
 	}
 	
 	public void programTestScheduler() {
+		// In order to test the scheduler, please uncomment the lines in ProcessManager.schedule()
 		Aux aux = new Aux();
 
 		Word[] program;
@@ -716,12 +753,20 @@ public class Sistema {
 		status = vm.processManager.createProcess(program);
 		System.out.println("new process successful? "+ status);
 
-		aux.dump(vm.m, 0, 40);
+		status = vm.processManager.createProcess(program);
+		System.out.println("new process successful? "+ status);
+
+		status = vm.processManager.createProcess(program);
+		System.out.println("new process successful? "+ status);
+
+		vm.processManager.killProcess(1);
+
+		aux.dump(vm.m, 0, 128);
 
 		vm.processManager.run();
 
 		System.out.println("----------------------------- after run all");
-		aux.dump(vm.m, 0, 40);
+		aux.dump(vm.m, 0, 128);
 	}
 
 	// ------------------------------------------- classes e funcoes auxiliares
