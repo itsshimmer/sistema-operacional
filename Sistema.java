@@ -694,7 +694,7 @@ public class Sistema {
 		status = vm.processManager.createProcess(program);
 		System.out.println("new process successful? "+ status);
 
-		aux.dump(vm.m, 0, 128);
+		aux.dump(vm.m, 0, 97);
 
 		// keep in mind that memory is only MARKED as free, its not overwritten with empty data
 		vm.processManager.killProcess(1);
@@ -707,7 +707,7 @@ public class Sistema {
 		status = vm.processManager.createProcess(program);
 		System.out.println("new process successful? "+ status);
 
-		aux.dump(vm.m, 0, 128);
+		aux.dump(vm.m, 0, 97);
 	}
 
 	public void programTestRunAll() {
