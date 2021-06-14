@@ -254,19 +254,26 @@ public class Sistema {
 	// ------------------- S O F T W A R E - inicio
 	// ----------------------------------------------------------
 
+	public enum State {
+		RUNNING,
+		READY,
+		BLOCKED,
+		FINISHED
+	}
+
 	public class ProcessControlBlock {
 		int id;
 		int[] memoryPages;
 		int pc;
 		int[] reg;
-		boolean finished;
+		State state;
 
 		public ProcessControlBlock(int id, int[] memoryPages) {
 			this.id = id;
 			this.memoryPages = memoryPages;
 			pc = 0;
 			reg = new int[10];
-			finished = false;
+			state = State.READY;
 		}
 	}
 	
@@ -347,7 +354,7 @@ public class Sistema {
 			runningProcess.reg = cpu.reg;
 			runningProcess.pc = cpu.pc;
 
-			if(!runningProcess.finished) {
+			if(runningProcess.state != State.FINISHED) {
 				processList.add(runningProcess);
 			}
 
@@ -374,7 +381,7 @@ public class Sistema {
 		}
 
 		public void stop() {
-			runningProcess.finished = true;
+			runningProcess.state = State.FINISHED;
 			scheduler();
 		}
 
@@ -605,8 +612,8 @@ public class Sistema {
 
 		//////////////////////////////////////////// FASE 6
 
-		// Sistema sistema = new Sistema();
-		// sistema.fase6();
+		Sistema sistema = new Sistema();
+		sistema.fase6();
 	}
 	// -------------------------------------------------------------------------------------------------------
 	// --------------- TUDO ABAIXO DE MAIN É AUXILIAR PARA FUNCIONAMENTO DO SISTEMA
