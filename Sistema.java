@@ -37,7 +37,7 @@ public class Sistema {
 	// -----------------------------------------------------
 
 	public enum Interrupts {
-		interruptNone, interruptInvalidInstruction, interruptInvalidAddress, interruptOverflow, interruptInvalidPaging, interruptScheduler, interruptStop;
+		interruptNone, interruptInvalidInstruction, interruptInvalidAddress, interruptOverflow, interruptInvalidPaging, interruptScheduler, interruptStop, interruptIO;
 	}
 
 	public enum Opcode {
@@ -48,7 +48,9 @@ public class Sistema {
 		TRAP; // instrução para interrupção de software
 	}
 
-	public class CPU {
+	public final int pageSize = 16; // you may configure the pageSize here
+
+	public class CPU extends Thread {
 		// característica do processador: contexto da CPU ...
 		private int pc; // ... composto de program counter,
 		private Word ir; // instruction register,
@@ -58,7 +60,6 @@ public class Sistema {
 		private int schedulerClock = 0;
 
 		private int[] pageTable;
-		final int pageSize = 16; // you may configure the pageSize here
 
 		private Interrupts interrupt; // instancia as interrupcoes
 		private InterruptHandler interruptHandler;
@@ -217,7 +218,7 @@ public class Sistema {
 	public class VM {
 		public int tamMem;
 		public Word[] m;
-		public CPU cpu;
+		public CPU cpu1;
 		public MemoryManager memoryManager;
 		public ProcessManager processManager;
 
@@ -228,16 +229,16 @@ public class Sistema {
 			m = new Word[tamMem]; // m ee a memoria
 			for (int i = 0; i < tamMem; i++) {
 				m[i] = new Word(Opcode.___, -1, -1, -1);
-			}
-			;
+			};
+
 			// cpu
-			cpu = new CPU(m, interruptHandler, trapHandler);
+			cpu1 = new CPU(m, interruptHandler, trapHandler);
 
-			cpu.maximumMemory = tamMem - 1;
-			cpu.minimumMemory = 0;
+			cpu1.maximumMemory = tamMem - 1;
+			cpu1.minimumMemory = 0;
 
-			memoryManager = new MemoryManager(cpu);
-			processManager = new ProcessManager(cpu, memoryManager);
+			memoryManager = new MemoryManager(m);
+			processManager = new ProcessManager(cpu1, memoryManager);
 		}
 	}
 	// ------------------- V M - fim
@@ -288,8 +289,8 @@ public class Sistema {
 			int[] memoryPages = memoryManager.alloc(program); // tries to allocate the program in the memory
 			if(memoryPages == null) {
 				System.out.println("ProcessManager.createProcess: couldn't allocate program");	
-			System.out.println("ProcessManager.createProcess: couldn't allocate program");
-				System.out.println("ProcessManager.createProcess: couldn't allocate program");	
+				// System.out.println("ProcessManager.createProcess: couldn't allocate program");
+				// System.out.println("ProcessManager.createProcess: couldn't allocate program");	
 				return false; // couldn't allocate program
 			}
 			ProcessControlBlock newProcess = new ProcessControlBlock(currentProcessIdentifier, memoryPages);
@@ -360,13 +361,13 @@ public class Sistema {
 				cpu.interrupt = Interrupts.interruptNone;
 
 				//---------------------------------------------------SCHEDULER TEST
-				// Aux aux = new Aux();
-				// aux.dump(vm.m, 0, 128);
-				// try {
-				// 	Thread.sleep(1000);
-				// } catch (InterruptedException e) {
-				// 	e.printStackTrace();
-				// }
+				Aux aux = new Aux();
+				aux.dump(vm.m, 0, 128);
+				try {
+					Thread.sleep(1000);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
 				//---------------------------------------------------END SCHEDULER TEST
 				cpu.run();
 			}
@@ -381,15 +382,15 @@ public class Sistema {
 	}
 
 	public class MemoryManager {
-		private CPU cpu;
+		private Word[] memory;
 		int availableFrames;
 		int totalFrames;
 		int allocatedFrames = 0;
 		private Boolean[] memoryMap;
 
-		public MemoryManager(CPU cpu) {
-			this.cpu = cpu;
-			availableFrames = cpu.m.length/cpu.pageSize;
+		public MemoryManager(Word[] memory) {
+			this.memory = memory;
+			availableFrames = memory.length/pageSize;
 			totalFrames = availableFrames;
 			memoryMap = new Boolean[availableFrames];
 			for(int i = 0; i<availableFrames; i++) {
@@ -425,7 +426,7 @@ public class Sistema {
 			}
 
 			// calculates how many frames we need
-			int neededFrames = (int)Math.ceil((double)words.length/(double)cpu.pageSize);
+			int neededFrames = (int)Math.ceil((double)words.length/(double)pageSize);
 
 			// check if we have enough frames
 			if (neededFrames<=availableFrames) {
@@ -443,16 +444,16 @@ public class Sistema {
 					int frame = findAvailableFrame(); 
 
 					// fills appropriate memory position with data
-					for(int frameOffset = 0; frameOffset<cpu.pageSize; frameOffset++) {
+					for(int frameOffset = 0; frameOffset<pageSize; frameOffset++) {
 						if(lastInsertedIndex+frameOffset>=words.length) {
 							break;
 						}
-						cpu.m[frame*cpu.pageSize+frameOffset].opc = words[lastInsertedIndex+frameOffset].opc;
-						cpu.m[frame*cpu.pageSize+frameOffset].r1 = words[lastInsertedIndex+frameOffset].r1;
-						cpu.m[frame*cpu.pageSize+frameOffset].r2 = words[lastInsertedIndex+frameOffset].r2;
-						cpu.m[frame*cpu.pageSize+frameOffset].p = words[lastInsertedIndex+frameOffset].p;
+						memory[frame*pageSize+frameOffset].opc = words[lastInsertedIndex+frameOffset].opc;
+						memory[frame*pageSize+frameOffset].r1 = words[lastInsertedIndex+frameOffset].r1;
+						memory[frame*pageSize+frameOffset].r2 = words[lastInsertedIndex+frameOffset].r2;
+						memory[frame*pageSize+frameOffset].p = words[lastInsertedIndex+frameOffset].p;
 					}
-					lastInsertedIndex = lastInsertedIndex + cpu.pageSize; // controls the iteration of the words(data)
+					lastInsertedIndex = lastInsertedIndex + pageSize; // controls the iteration of the words(data)
 					memoryMap[frame] = true; // frame is now occupied
 					frames[currentNewFrame] = frame; // stores frame id
 					availableFrames--;
@@ -489,13 +490,13 @@ public class Sistema {
 			switch(interrupt) {
 				case interruptScheduler:
 					System.out.println("_interruptScheduler_");
-					vm.cpu.schedulerClock = 0;
+					vm.cpu1.schedulerClock = 0;
 					vm.processManager.scheduler();
 					break;
 
 				case interruptStop:
 					System.out.println("***interruptStop***");
-					vm.cpu.schedulerClock = 0;
+					vm.cpu1.schedulerClock = 0;
 					vm.processManager.stop();
 					break;
 
@@ -599,8 +600,13 @@ public class Sistema {
 
 		// PROGRAM TEST SCHEDULER
 		
-		Sistema s = new Sistema();
-		s.programTestScheduler();
+		// Sistema s = new Sistema();
+		// s.programTestScheduler();
+
+		//////////////////////////////////////////// FASE 6
+
+		// Sistema sistema = new Sistema();
+		// sistema.fase6();
 	}
 	// -------------------------------------------------------------------------------------------------------
 	// --------------- TUDO ABAIXO DE MAIN É AUXILIAR PARA FUNCIONAMENTO DO SISTEMA
@@ -767,6 +773,12 @@ public class Sistema {
 
 		System.out.println("----------------------------- after run all");
 		aux.dump(vm.m, 0, 128);
+	}
+
+	public void fase6() {
+		while(true) {
+			System.out.println("menu");
+		}
 	}
 
 	// ------------------------------------------- classes e funcoes auxiliares
