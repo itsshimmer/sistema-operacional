@@ -359,24 +359,30 @@ public class Sistema {
 			}
 
 			if(!processList.isEmpty()) {
-				runningProcess = processList.get(0);
-				processList.remove(runningProcess);
 
-				cpu.pc = runningProcess.pc;
-				cpu.reg = runningProcess.reg;
-				cpu.pageTable = runningProcess.memoryPages;
-				cpu.interrupt = Interrupts.interruptNone;
-
-				//---------------------------------------------------SCHEDULER TEST
-				Aux aux = new Aux();
-				aux.dump(vm.m, 0, 128);
-				try {
-					Thread.sleep(1000);
-				} catch (InterruptedException e) {
-					e.printStackTrace();
+				if(processList.get(0).state != State.BLOCKED) {
+					runningProcess = processList.get(0);
+					processList.remove(runningProcess);
+	
+					cpu.pc = runningProcess.pc;
+					cpu.reg = runningProcess.reg;
+					cpu.pageTable = runningProcess.memoryPages;
+					cpu.interrupt = Interrupts.interruptNone;
+	
+					//---------------------------------------------------SCHEDULER TEST
+					// Aux aux = new Aux();
+					// aux.dump(vm.m, 0, 128);
+					// try {
+					// 	Thread.sleep(1000);
+					// } catch (InterruptedException e) {
+					// 	e.printStackTrace();
+					// }
+					//---------------------------------------------------END SCHEDULER TEST
+					cpu.run();
+				} else {
+					processList.add(runningProcess);
 				}
-				//---------------------------------------------------END SCHEDULER TEST
-				cpu.run();
+				
 			}
 		}
 
@@ -507,6 +513,10 @@ public class Sistema {
 					vm.processManager.stop();
 					break;
 
+				case interruptIO:
+
+					break; 
+
 				default:
 					System.out.println("A interruption has just happened! " + interrupt);
 					break;
@@ -520,7 +530,6 @@ public class Sistema {
 
 		public void trap(CPU cpu) {
 			System.out.println("A system call has just happened! " + cpu.reg[8] + "|" + cpu.reg[9]);
-
 			switch (cpu.reg[8]) { // register 8 stores what needs to be done in the system call
 			case 1: // in this case we'll store data in the address stored in register 9
 				System.out.println("Please input an integer:");
