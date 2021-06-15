@@ -238,6 +238,7 @@ public class Sistema {
 			cpu1.maximumMemory = tamMem - 1;
 			cpu1.minimumMemory = 0;
 
+			ioManager = new IOManager(m);
 			memoryManager = new MemoryManager(m);
 			processManager = new ProcessManager(cpu1, memoryManager);
 		}
@@ -284,6 +285,7 @@ public class Sistema {
 		private CPU cpu;
 		private MemoryManager memoryManager;
 		private ArrayList<ProcessControlBlock> processList = new ArrayList<>();
+		private ArrayList<ProcessControlBlock> blockedProcessList = new ArrayList<>();
 
 		public ProcessManager(CPU cpu, MemoryManager memoryManager) {
 			this.cpu = cpu;
@@ -355,13 +357,16 @@ public class Sistema {
 			runningProcess.reg = cpu.reg;
 			runningProcess.pc = cpu.pc;
 
-			if(runningProcess.state != State.FINISHED) {
+			if(runningProcess.state != State.FINISHED && runningProcess.state != State.BLOCKED) {
+				runningProcess.state = State.READY;
 				processList.add(runningProcess);
 			}
 
+			runningProcess.state = State.READY;
+
 			if(!processList.isEmpty()) {
 
-				if(processList.get(0).state != State.BLOCKED) {
+				if(processList.get(0).state == State.READY) {
 					runningProcess = processList.get(0);
 					processList.remove(runningProcess);
 	
@@ -369,7 +374,6 @@ public class Sistema {
 					cpu.reg = runningProcess.reg;
 					cpu.pageTable = runningProcess.memoryPages;
 					cpu.interrupt = Interrupts.interruptNone;
-	
 					//---------------------------------------------------SCHEDULER TEST
 					// Aux aux = new Aux();
 					// aux.dump(vm.m, 0, 128);
@@ -379,9 +383,12 @@ public class Sistema {
 					// 	e.printStackTrace();
 					// }
 					//---------------------------------------------------END SCHEDULER TEST
+					runningProcess.state = State.RUNNING;
 					cpu.run();
 				} else {
-					processList.add(runningProcess);
+					ProcessControlBlock temp = processList.get(0);
+					processList.remove(0);
+					processList.add(temp);
 				}
 				
 			}
@@ -394,6 +401,23 @@ public class Sistema {
 
 		public ProcessControlBlock getRunningProcess() {
 			return runningProcess;
+		}
+
+		public void addBlockedProcess(ProcessControlBlock process) {
+			blockedProcessList.add(process);
+		}
+
+		public ProcessControlBlock popBlockedProcess(ProcessControlBlock process) {
+			ProcessControlBlock pcb = blockedProcessList.get(0);
+			blockedProcessList.remove(pcb);
+			return pcb;
+		}
+
+		public void finishIO() {
+			ProcessControlBlock pcb = blockedProcessList.get(0);
+			pcb.state = State.READY;
+			blockedProcessList.remove(pcb);
+			processList.add(pcb);
 		}
 
 	}
@@ -542,13 +566,15 @@ public class Sistema {
 							System.out.println("Output: ");
 							Aux.dump(memory[currentIORequest.reg9]);
 							break;
-						}
+					}
+					vm.cpu1.interrupt = Interrupts.interruptIO;
 				}
+				//sleep(1000); simular lentidão de IO? kkkk
 			}
 		}
 
-		public void addIO(IORequest ioRequest) {
-			IOList.add(ioRequest);
+		public void addIO(ProcessControlBlock pcb, int reg8, int reg9) {
+			IOList.add(new IORequest(pcb, reg8, reg9));
 		}
 	}
 	
@@ -570,7 +596,8 @@ public class Sistema {
 					break;
 
 				case interruptIO:
-
+					System.out.println("+++interruptIO+++");
+					vm.processManager.finishIO();
 					break; 
 
 				default:
@@ -586,8 +613,12 @@ public class Sistema {
 
 		public void trap(CPU cpu) {
 			System.out.println("A system call has just happened! " + cpu.reg[8] + "|" + cpu.reg[9]);
-			ProcessControlBlock currentProcess = cpu.getCurrentProcess();
-			IOManager.addIO(currentProcess, cpu.reg[8], cpu.reg[9]);
+			ProcessControlBlock currentProcess = vm.processManager.getRunningProcess();
+			
+			currentProcess.state = State.BLOCKED;
+			vm.ioManager.addIO(currentProcess, cpu.reg[8], cpu.reg[9]);
+			vm.processManager.addBlockedProcess(currentProcess);
+			vm.cpu1.interrupt = Interrupts.interruptScheduler; // makes the CPU run another process while waiting for IO to finish
 			//TODO
 			// switch (cpu.reg[8]) { // register 8 stores what needs to be done in the system call
 			// case 1: // in this case we'll store data in the address stored in register 9
@@ -738,7 +769,7 @@ public class Sistema {
 		aux.dump(vm.m, 0, 10);
 	}
 
-	public void programTestInvalidInstruction() {
+	public void programTestInvalidInstruction()  {
 		Aux aux = new Aux();
 		Word[] program = new Programas().programTestInvalidInstruction;
 		
@@ -851,9 +882,23 @@ public class Sistema {
 	}
 
 	public void fase6() {
-		while(true) {
+		vm.ioManager.run();
+		// while(true) {
 			System.out.println("menu");
-		}
+			Aux aux = new Aux();
+
+			Word[] program;
+			boolean status;
+	
+			program = new Programas().fibonacci10;
+			status = vm.processManager.createProcess(program);
+			System.out.println("new process successful? "+ status);
+
+			vm.processManager.run();
+
+			System.out.println("----------------------------- after run all");
+			aux.dump(vm.m, 0, 128);
+		// }
 	}
 
 	// ------------------------------------------- classes e funcoes auxiliares
