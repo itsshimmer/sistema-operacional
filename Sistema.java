@@ -221,6 +221,7 @@ public class Sistema {
 		public CPU cpu1;
 		public MemoryManager memoryManager;
 		public ProcessManager processManager;
+		public IOManager ioManager;
 
 		public VM(InterruptHandler interruptHandler, TrapHandler trapHandler) { // vm deve ser configurada com endereço
 																				// de tratamento de interrupcoes
@@ -391,6 +392,9 @@ public class Sistema {
 			scheduler();
 		}
 
+		public ProcessControlBlock getRunningProcess() {
+			return runningProcess;
+		}
 
 	}
 
@@ -496,6 +500,58 @@ public class Sistema {
 	
 	}
 
+	public class IOManager extends Thread {
+
+		private ArrayList<IORequest> IOList = new ArrayList<IORequest>();
+		private Word[] memory;
+
+		public IOManager(Word[] memory) {
+			this.memory = memory;
+		}
+
+		public class IORequest {
+			ProcessControlBlock process;
+			int reg8;
+			int reg9;
+
+			public IORequest(ProcessControlBlock process, int reg8, int reg9) {
+				this.process = process;
+				this.reg8 = reg8;
+				this.reg9 = reg9;
+			}
+		}
+
+		public void run() {
+			while(true) {
+				if(!IOList.isEmpty()) {
+					IORequest currentIORequest = IOList.get(0);
+					IOList.remove(0);
+					switch (currentIORequest.reg8) { // register 8 stores what needs to be done in the system call
+						case 1: // in this case we'll store data in the address stored in register 9
+							System.out.println("Please input an integer:");
+							Scanner input = new Scanner(System.in);
+							int anInt = input.nextInt();
+							memory[currentIORequest.reg9].p = anInt; // stores the input
+							memory[currentIORequest.reg9].opc = Opcode.DATA; // sets the destination as DATA
+							System.out.println("Value stored in the position " + currentIORequest.reg9);
+							System.out.println("Stored value: ");
+							Aux.dump(memory[currentIORequest.reg9]); // dumps the memory of the vm at the address that was set in register 9
+							break;
+			
+						case 2: // in this case we'll print the data in the address stored in register 9
+							System.out.println("Output: ");
+							Aux.dump(memory[currentIORequest.reg9]);
+							break;
+						}
+				}
+			}
+		}
+
+		public void addIO(IORequest ioRequest) {
+			IOList.add(ioRequest);
+		}
+	}
+	
 	public class InterruptHandler {
 
 		public void handle(Interrupts interrupt) {
@@ -530,23 +586,26 @@ public class Sistema {
 
 		public void trap(CPU cpu) {
 			System.out.println("A system call has just happened! " + cpu.reg[8] + "|" + cpu.reg[9]);
-			switch (cpu.reg[8]) { // register 8 stores what needs to be done in the system call
-			case 1: // in this case we'll store data in the address stored in register 9
-				System.out.println("Please input an integer:");
-				Scanner input = new Scanner(System.in);
-				int anInt = input.nextInt();
-				cpu.m[cpu.reg[9]].p = anInt; // stores the input
-				cpu.m[cpu.reg[9]].opc = Opcode.DATA; // sets the destination as DATA
-				System.out.println("Value stored in the position " + cpu.reg[9]);
-				System.out.println("Stored value: ");
-				aux.dump(cpu.m[cpu.reg[9]]); // dumps the memory of the vm at the address that was set in register 9
-				break;
+			ProcessControlBlock currentProcess = cpu.getCurrentProcess();
+			IOManager.addIO(currentProcess, cpu.reg[8], cpu.reg[9]);
+			//TODO
+			// switch (cpu.reg[8]) { // register 8 stores what needs to be done in the system call
+			// case 1: // in this case we'll store data in the address stored in register 9
+			// 	System.out.println("Please input an integer:");
+			// 	Scanner input = new Scanner(System.in);
+			// 	int anInt = input.nextInt();
+			// 	cpu.m[cpu.reg[9]].p = anInt; // stores the input
+			// 	cpu.m[cpu.reg[9]].opc = Opcode.DATA; // sets the destination as DATA
+			// 	System.out.println("Value stored in the position " + cpu.reg[9]);
+			// 	System.out.println("Stored value: ");
+			// 	aux.dump(cpu.m[cpu.reg[9]]); // dumps the memory of the vm at the address that was set in register 9
+			// 	break;
 
-			case 2: // in this case we'll print the data in the address stored in register 9
-				System.out.println("Output: ");
-				aux.dump(cpu.m[cpu.reg[9]]);
-				break;
-			}
+			// case 2: // in this case we'll print the data in the address stored in register 9
+			// 	System.out.println("Output: ");
+			// 	aux.dump(cpu.m[cpu.reg[9]]);
+			// 	break;
+			// }
 		}
 
 	}
@@ -798,8 +857,8 @@ public class Sistema {
 	}
 
 	// ------------------------------------------- classes e funcoes auxiliares
-	public class Aux {
-		public void dump(Word w) {
+	public static class Aux {
+		public static void dump(Word w) {
 			System.out.print("[ ");
 			System.out.print(w.opc);
 			System.out.print(", ");
@@ -811,7 +870,7 @@ public class Sistema {
 			System.out.println("  ] ");
 		}
 
-		public void dump(Word[] m, int ini, int fim) {
+		public static void dump(Word[] m, int ini, int fim) {
 			for (int i = ini; i < fim; i++) {
 				System.out.print(i);
 				System.out.print(":  ");
@@ -819,7 +878,7 @@ public class Sistema {
 			}
 		}
 
-		public void carga(Word[] p, Word[] m) {
+		public static void carga(Word[] p, Word[] m) {
 			for (int i = 0; i < p.length; i++) {
 				m[i].opc = p[i].opc;
 				m[i].r1 = p[i].r1;
@@ -1051,7 +1110,5 @@ public class Sistema {
 
 
 	}
-
-	
 
 }
