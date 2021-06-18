@@ -200,8 +200,8 @@ public class Sistema {
 
 							case TRAP:
 								flag = true;
-								trapHandler.trap(this);
 								pc++;
+								trapHandler.trap(this);
 								break;
 
 							default:
@@ -436,8 +436,8 @@ public class Sistema {
 
 		public void finishIO() {
 			ProcessControlBlock pcb = blockedProcessList.get(0);
-			pcb.state = State.READY;
 			blockedProcessList.remove(pcb);
+			pcb.state = State.READY;
 			processList.add(pcb);
 		}
 
