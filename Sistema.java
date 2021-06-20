@@ -118,8 +118,8 @@ public class Sistema {
 
 		public void run() { // execucao da CPU supoe que o contexto da CPU, vide acima, esta devidamente
 							// setado
-			boolean flag = false;
 			while (true) {
+				boolean flag = false;
 				try {
 					semcpu.acquire();
 				} catch (Exception e) {
@@ -200,8 +200,8 @@ public class Sistema {
 
 							case TRAP:
 								flag = true;
-								pc++;
 								trapHandler.trap(this);
+								pc++;
 								break;
 
 							default:
@@ -417,6 +417,7 @@ public class Sistema {
 
 		public void stop() {
 			runningProcess.state = State.FINISHED;
+			processList.remove(runningProcess);
 			scheduler();
 		}
 
@@ -444,6 +445,10 @@ public class Sistema {
 		public void saveContext() {
 			runningProcess.reg = cpu.reg;
 			runningProcess.pc = cpu.pc;
+		}
+
+		public void addCurrentProcess() {
+			processList.add(runningProcess);
 		}
 
 	}
@@ -601,7 +606,8 @@ public class Sistema {
 						Aux.dump(memory[currentIORequest.reg9]);
 						break;
 				}
-				interruptHandler.handle(Interrupts.interruptIO);
+				vm.cpu1.interrupt = Interrupts.interruptIO;
+				// interruptHandler.handle(Interrupts.interruptIO);
 				// sleep(1000); simular lentidão de IO? kkkk
 			}
 		}
@@ -621,6 +627,7 @@ public class Sistema {
 					vm.processManager.saveContext();
 					vm.cpu1.schedulerClock = 0;
 					vm.processManager.runningProcess.state = State.READY;
+					vm.processManager.addCurrentProcess();
 					vm.processManager.scheduler();
 					break;
 
@@ -953,6 +960,35 @@ public class Sistema {
 
 		aux.dump(vm.m, 0, 64);
 
+	}
+
+	public void fase7() {
+		Aux aux = new Aux();
+		Word[] program;
+		boolean status;
+
+		program = new Programas().programTestTrapInput;
+		status = vm.processManager.createProcess(program);
+		System.out.println("new process successful? " + status);
+		aux.dump(vm.m, 0, 64);
+		System.out.println("---------------------------------- após execucao ");
+
+		// try {
+		// Thread.sleep(10000);
+		// } catch(Exception e) {
+		// System.out.println("fatal");
+		// }
+
+		vm.ioManager.start();
+		vm.processManager.run();
+
+		try {
+			vm.cpu1.join();
+		} catch (Exception e) {
+
+		}
+
+		aux.dump(vm.m, 0, 64);
 	}
 
 	// ------------------------------------------- classes e funcoes auxiliares
