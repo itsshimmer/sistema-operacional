@@ -594,7 +594,7 @@ public class Sistema {
 				IOList.remove(0);
 				switch (currentIORequest.reg8) { // register 8 stores what needs to be done in the system call
 					case 1: // in this case we'll store data in the address stored in register 9
-						System.out.println("Please input an integer:");
+						System.out.println("Please input an integer to store:");
 						Scanner input = new Scanner(System.in);
 						int anInt = input.nextInt();
 						memory[currentIORequest.reg9].p = anInt; // stores the input
@@ -613,13 +613,14 @@ public class Sistema {
 						break;
 
 					case -1:
-						System.out.println("1: RUN CPU");
+						System.out.println("1: RUN CPU (run only once)");
 						System.out.println("2: MEMORY DUMP");
 						System.out.println("3: PROGRAM | TRAP INPUT");
 						System.out.println("4: PROGRAM | TRAP OUTPUT");
 						System.out.println("5: PROGRAM | FIBONACCI");
-						System.out.println("6: EXIT");
-						System.out.println("Please input an integer:");
+						System.out.println("6: DO NOTHING");
+						System.out.println("7: EXIT");
+						System.out.println("Please select an option from the menu:");
 						Scanner input2 = new Scanner(System.in);
 						int anInt2 = input2.nextInt();
 						OutputIntList.add(anInt2);
@@ -651,22 +652,24 @@ public class Sistema {
 
 			switch (interrupt) {
 				case interruptScheduler:
-					System.out.println("_interruptScheduler_");
-					vm.processManager.saveContext();
+					// System.out.println("_interruptScheduler_");
 					vm.cpu1.schedulerClock = 0;
-					vm.processManager.runningProcess.state = State.READY;
-					vm.processManager.addCurrentProcess();
+					if(vm.processManager.runningProcess != null) {
+						vm.processManager.saveContext();
+						vm.processManager.runningProcess.state = State.READY;
+						vm.processManager.addCurrentProcess();
+					}
 					vm.processManager.scheduler();
 					break;
 
 				case interruptStop:
-					System.out.println("***interruptStop***");
+					// System.out.println("***interruptStop***");
 					vm.cpu1.schedulerClock = 0;
 					vm.processManager.stop();
 					break;
 
 				case interruptIO:
-					System.out.println("+++interruptIO+++");
+					// System.out.println("+++interruptIO+++");
 					vm.processManager.finishIO();
 					vm.processManager.scheduler();
 					break;
@@ -683,7 +686,7 @@ public class Sistema {
 		Aux aux = new Aux();
 
 		public void trap(CPU cpu) {
-			System.out.println("A system call has just happened! " + cpu.reg[8] + "|" + cpu.reg[9]);
+			// System.out.println("A system call has just happened! " + cpu.reg[8] + "|" + cpu.reg[9]);
 			ProcessControlBlock currentProcess = vm.processManager.getRunningProcess();
 
 			// salva estado e bloqueia, escolhe novo processo(scheduler)
@@ -1022,18 +1025,24 @@ public class Sistema {
 					program = new Programas().programTestTrapInput;
 					status = vm.processManager.createProcess(program);
 					System.out.println("new process successful? " + status);
+					vm.cpu1.interruptHandler.handle(Interrupts.interruptScheduler);
 					break;
 				case 4:
 					program = new Programas().programTestTrapOutput;
 					status = vm.processManager.createProcess(program);
 					System.out.println("new process successful? " + status);
+					vm.cpu1.interruptHandler.handle(Interrupts.interruptScheduler);
 					break;
 				case 5:
 					program = new Programas().fibonacci10;
 					status = vm.processManager.createProcess(program);
 					System.out.println("new process successful? " + status);
+					vm.cpu1.interruptHandler.handle(Interrupts.interruptScheduler);
 					break;
 				case 6:
+					// System.out.println("idle");
+					break;
+				case 7:
 					run = false;
 					break;
 				default:
