@@ -241,6 +241,7 @@ public class Sistema {
 		public MemoryManager memoryManager;
 		public ProcessManager processManager;
 		public IOManager ioManager;
+		public Semaphore menusem = new Semaphore(0);
 
 		public VM(InterruptHandler interruptHandler, TrapHandler trapHandler) { // vm deve ser configurada com endereço
 																				// de tratamento de interrupcoes
@@ -557,6 +558,7 @@ public class Sistema {
 
 	public class IOManager extends Thread {
 
+		public ArrayList<Integer> OutputIntList = new ArrayList<Integer>();
 		private ArrayList<IORequest> IOList = new ArrayList<IORequest>();
 		private Word[] memory;
 		private Semaphore iosemaforo = new Semaphore(0);
@@ -575,17 +577,19 @@ public class Sistema {
 				this.reg8 = reg8;
 				this.reg9 = reg9;
 			}
+
+			public IORequest(int reg8) {
+				this.reg8 = reg8;
+			}
 		}
 
 		public void run() {
-			System.out.println("testeeeeeeeeee1");
 			while (true) {
 				try {
 					iosemaforo.acquire();
 				} catch (Exception e) {
 
 				}
-				System.out.println("testeeeeeeeeee2");
 				IORequest currentIORequest = IOList.get(0);
 				IOList.remove(0);
 				switch (currentIORequest.reg8) { // register 8 stores what needs to be done in the system call
@@ -599,14 +603,34 @@ public class Sistema {
 						System.out.println("Stored value: ");
 						Aux.dump(memory[currentIORequest.reg9]); // dumps the memory of the vm at the address that
 																	// was set in register 9
+						vm.cpu1.interrupt = Interrupts.interruptIO;
 						break;
 
 					case 2: // in this case we'll print the data in the address stored in register 9
 						System.out.println("Output: ");
 						Aux.dump(memory[currentIORequest.reg9]);
+						vm.cpu1.interrupt = Interrupts.interruptIO;
+						break;
+
+					case -1:
+						System.out.println("1: RUN CPU");
+						System.out.println("2: MEMORY DUMP");
+						System.out.println("3: PROGRAM | TRAP INPUT");
+						System.out.println("4: PROGRAM | TRAP OUTPUT");
+						System.out.println("5: PROGRAM | FIBONACCI");
+						System.out.println("6: EXIT");
+						System.out.println("Please input an integer:");
+						Scanner input2 = new Scanner(System.in);
+						int anInt2 = input2.nextInt();
+						OutputIntList.add(anInt2);
+						vm.menusem.release();
+						break;
+
+					default:
+						System.out.println("IOManager invalid request");
 						break;
 				}
-				vm.cpu1.interrupt = Interrupts.interruptIO;
+				
 				// interruptHandler.handle(Interrupts.interruptIO);
 				// sleep(1000); simular lentidão de IO? kkkk
 			}
@@ -614,6 +638,10 @@ public class Sistema {
 
 		public void addIO(ProcessControlBlock pcb, int reg8, int reg9) {
 			IOList.add(new IORequest(pcb, reg8, reg9));
+		}
+
+		public void addIO(int reg8) {
+			IOList.add(new IORequest(reg8));
 		}
 	}
 
@@ -758,10 +786,10 @@ public class Sistema {
 		// Sistema s = new Sistema();
 		// s.programTestScheduler();
 
-		//////////////////////////////////////////// FASE 6
+		//////////////////////////////////////////// FASE FINAL
 
 		Sistema sistema = new Sistema();
-		sistema.fase6();
+		sistema.menu();
 	}
 	// -------------------------------------------------------------------------------------------------------
 	// --------------- TUDO ABAIXO DE MAIN É AUXILIAR PARA FUNCIONAMENTO DO SISTEMA
@@ -962,33 +990,66 @@ public class Sistema {
 
 	}
 
-	public void fase7() {
+	public void menu() {
 		Aux aux = new Aux();
 		Word[] program;
 		boolean status;
+		boolean run = true;
+		
+		//Starts IOManager
+		new Thread(() -> {
+			vm.ioManager.start();
+		}).start();
 
-		program = new Programas().programTestTrapInput;
-		status = vm.processManager.createProcess(program);
-		System.out.println("new process successful? " + status);
-		aux.dump(vm.m, 0, 64);
-		System.out.println("---------------------------------- após execucao ");
-
-		// try {
-		// Thread.sleep(10000);
-		// } catch(Exception e) {
-		// System.out.println("fatal");
-		// }
-
-		vm.ioManager.start();
-		vm.processManager.run();
-
-		try {
-			vm.cpu1.join();
-		} catch (Exception e) {
-
+		while(run) {
+			vm.ioManager.addIO(-1); // shows menu and asks for an int
+			vm.ioManager.iosemaforo.release();
+			try {
+				vm.menusem.acquire();
+			} catch (Exception e) {
+				
+			}
+			int selection = vm.ioManager.OutputIntList.get(0);
+			vm.ioManager.OutputIntList.remove(0);
+			switch(selection) {
+				case 1:
+					vm.processManager.run();
+					break;
+				case 2:
+					aux.dump(vm.m, 0, 64);
+					break;
+				case 3:
+					program = new Programas().programTestTrapInput;
+					status = vm.processManager.createProcess(program);
+					System.out.println("new process successful? " + status);
+					break;
+				case 4:
+					program = new Programas().programTestTrapOutput;
+					status = vm.processManager.createProcess(program);
+					System.out.println("new process successful? " + status);
+					break;
+				case 5:
+					program = new Programas().fibonacci10;
+					status = vm.processManager.createProcess(program);
+					System.out.println("new process successful? " + status);
+					break;
+				case 6:
+					run = false;
+					break;
+				default:
+					System.out.println("Invalid option");
+					break;
+			}
 		}
 
-		aux.dump(vm.m, 0, 64);
+		vm.cpu1.stop();
+		vm.ioManager.stop();
+
+	}
+
+	public int readInt() {
+		Scanner input = new Scanner(System.in);
+		return input.nextInt();
 	}
 
 	// ------------------------------------------- classes e funcoes auxiliares
