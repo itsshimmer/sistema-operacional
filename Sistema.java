@@ -50,7 +50,7 @@ public class Sistema {
 		TRAP; // instrução para interrupção de software
 	}
 
-	public final int pageSize = 16; // you may configure the pageSize here
+	public static final int pageSize = 16; // you may configure the pageSize here
 
 	public class CPU extends Thread {
 
@@ -200,8 +200,8 @@ public class Sistema {
 
 							case TRAP:
 								flag = true;
-								trapHandler.trap(this);
 								pc++;
+								trapHandler.trap(this);
 								break;
 
 							default:
@@ -578,9 +578,24 @@ public class Sistema {
 				this.reg9 = reg9;
 			}
 
-			public IORequest(int reg8) {
+			public IORequest(ProcessControlBlock process, int reg8) {
+				this.process = process;
 				this.reg8 = reg8;
 			}
+		}
+
+		public int translateLogicAddress(ProcessControlBlock process, int address) {
+			int destinationPage = address / Sistema.pageSize;
+			int destinationOffset = address % Sistema.pageSize;
+			int physicalMemoryAddress;
+			try {
+				physicalMemoryAddress = process.memoryPages[destinationPage] * Sistema.pageSize + destinationOffset;
+				// ( FRAME )*pageSize + offset
+			} catch (IndexOutOfBoundsException e) {
+				vm.cpu1.interrupt = Interrupts.interruptInvalidPaging;
+				return -1;
+			}
+			return physicalMemoryAddress;
 		}
 
 		public void run() {
@@ -597,18 +612,18 @@ public class Sistema {
 						System.out.println("Please input an integer to store:");
 						Scanner input = new Scanner(System.in);
 						int anInt = input.nextInt();
-						memory[currentIORequest.reg9].p = anInt; // stores the input
-						memory[currentIORequest.reg9].opc = Opcode.DATA; // sets the destination as DATA
-						System.out.println("Value stored in the position " + currentIORequest.reg9);
+						memory[translateLogicAddress(currentIORequest.process, currentIORequest.reg9)].p = anInt; // stores the input
+						memory[translateLogicAddress(currentIORequest.process, currentIORequest.reg9)].opc = Opcode.DATA; // sets the destination as DATA
+						System.out.println("Value stored in the position " + translateLogicAddress(currentIORequest.process, currentIORequest.reg9));
 						System.out.println("Stored value: ");
-						Aux.dump(memory[currentIORequest.reg9]); // dumps the memory of the vm at the address that
+						Aux.dump(memory[translateLogicAddress(currentIORequest.process, currentIORequest.reg9)]); // dumps the memory of the vm at the address that
 																	// was set in register 9
 						vm.cpu1.interrupt = Interrupts.interruptIO;
 						break;
 
 					case 2: // in this case we'll print the data in the address stored in register 9
 						System.out.println("Output: ");
-						Aux.dump(memory[currentIORequest.reg9]);
+						Aux.dump(memory[translateLogicAddress(currentIORequest.process, currentIORequest.reg9)]);
 						vm.cpu1.interrupt = Interrupts.interruptIO;
 						break;
 
@@ -641,8 +656,8 @@ public class Sistema {
 			IOList.add(new IORequest(pcb, reg8, reg9));
 		}
 
-		public void addIO(int reg8) {
-			IOList.add(new IORequest(reg8));
+		public void addIO(ProcessControlBlock pcb, int reg8) {
+			IOList.add(new IORequest(pcb, reg8));
 		}
 	}
 
@@ -1005,7 +1020,7 @@ public class Sistema {
 		}).start();
 
 		while(run) {
-			vm.ioManager.addIO(-1); // shows menu and asks for an int
+			vm.ioManager.addIO(null, -1); // shows menu and asks for an int
 			vm.ioManager.iosemaforo.release();
 			try {
 				vm.menusem.acquire();
@@ -1019,7 +1034,7 @@ public class Sistema {
 					vm.processManager.run();
 					break;
 				case 2:
-					aux.dump(vm.m, 0, 64);
+					aux.dump(vm.m, 0, 128);
 					break;
 				case 3:
 					program = new Programas().programTestTrapInput;
