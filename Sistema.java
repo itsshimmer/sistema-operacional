@@ -414,11 +414,16 @@ public class Sistema {
 				}
 
 			}
+
 		}
 
 		public void stop() {
 			runningProcess.state = State.FINISHED;
+			// should free the memory, but doesn't for debugging purposes
+			// memoryManager.free(runningProcess.memoryPages);
 			processList.remove(runningProcess);
+			System.out.println("STOPPED PROCESS ID: " + runningProcess.id);
+			runningProcess = null;
 			scheduler();
 		}
 
@@ -609,6 +614,7 @@ public class Sistema {
 				IOList.remove(0);
 				switch (currentIORequest.reg8) { // register 8 stores what needs to be done in the system call
 					case 1: // in this case we'll store data in the address stored in register 9
+						System.out.println("Process ID: " + currentIORequest.process.id);
 						System.out.println("Please input an integer to store:");
 						Scanner input = new Scanner(System.in);
 						int anInt = input.nextInt();
@@ -622,6 +628,7 @@ public class Sistema {
 						break;
 
 					case 2: // in this case we'll print the data in the address stored in register 9
+						System.out.println("Process ID: " + currentIORequest.process.id);
 						System.out.println("Output: ");
 						Aux.dump(memory[translateLogicAddress(currentIORequest.process, currentIORequest.reg9)]);
 						vm.cpu1.interrupt = Interrupts.interruptIO;
