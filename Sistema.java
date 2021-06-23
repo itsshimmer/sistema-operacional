@@ -423,7 +423,6 @@ public class Sistema {
 			// memoryManager.free(runningProcess.memoryPages);
 			processList.remove(runningProcess);
 			System.out.println("STOPPED PROCESS ID: " + runningProcess.id);
-			runningProcess = null;
 			scheduler();
 		}
 
@@ -624,14 +623,14 @@ public class Sistema {
 						System.out.println("Stored value: ");
 						Aux.dump(memory[translateLogicAddress(currentIORequest.process, currentIORequest.reg9)]); // dumps the memory of the vm at the address that
 																	// was set in register 9
-						vm.cpu1.interrupt = Interrupts.interruptIO;
+						interruptHandler.handle(Interrupts.interruptIO);
 						break;
 
 					case 2: // in this case we'll print the data in the address stored in register 9
 						System.out.println("Process ID: " + currentIORequest.process.id);
 						System.out.println("Output: ");
 						Aux.dump(memory[translateLogicAddress(currentIORequest.process, currentIORequest.reg9)]);
-						vm.cpu1.interrupt = Interrupts.interruptIO;
+						interruptHandler.handle(Interrupts.interruptIO);
 						break;
 
 					case -1:
@@ -653,9 +652,6 @@ public class Sistema {
 						System.out.println("IOManager invalid request");
 						break;
 				}
-				
-				// interruptHandler.handle(Interrupts.interruptIO);
-				// sleep(1000); simular lentidão de IO? kkkk
 			}
 		}
 
@@ -678,8 +674,10 @@ public class Sistema {
 					vm.cpu1.schedulerClock = 0;
 					if(vm.processManager.runningProcess != null) {
 						vm.processManager.saveContext();
-						vm.processManager.runningProcess.state = State.READY;
-						vm.processManager.addCurrentProcess();
+						if(vm.processManager.runningProcess.state == State.RUNNING) {
+							vm.processManager.runningProcess.state = State.READY;
+							vm.processManager.addCurrentProcess();
+						}
 					}
 					vm.processManager.scheduler();
 					break;
@@ -716,8 +714,8 @@ public class Sistema {
 			currentProcess.state = State.BLOCKED;
 			vm.ioManager.addIO(currentProcess, cpu.reg[8], cpu.reg[9]);
 			vm.processManager.addBlockedProcess(currentProcess);
-			vm.ioManager.iosemaforo.release();
 			vm.processManager.scheduler(); // makes the CPU run another process while waiting for IO to finish
+			vm.ioManager.iosemaforo.release();
 			// TODO
 			// switch (cpu.reg[8]) { // register 8 stores what needs to be done in the
 			// system call
