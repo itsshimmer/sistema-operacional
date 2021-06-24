@@ -63,6 +63,8 @@ public class Sistema {
 		final private int schedulerLimit = 5;
 		private int schedulerClock = 0;
 
+		public boolean cpuAtiva = false;
+
 		private int[] pageTable;
 
 		private Interrupts interrupt; // instancia as interrupcoes
@@ -120,11 +122,14 @@ public class Sistema {
 							// setado
 			while (true) {
 				boolean flag = false;
+				// ---------------- cpuAtiva = false
 				try {
 					semcpu.acquire();
 				} catch (Exception e) {
 					
 				}
+				
+				// ---------------- cpuAtiva = true
 				while (true) { // ciclo de instrucoes. acaba cfe instrucao, veja cada caso.
 					// FETCH
 					if (valid(translateLogicAddress(pc))) {
@@ -217,7 +222,10 @@ public class Sistema {
 					// VERIFICA INTERRUPÇÃO !!! - TERCEIRA FASE DO CICLO DE INSTRUÇÕES
 					if (!(interrupt == Interrupts.interruptNone)) {
 						interruptHandler.handle(interrupt);
-						break; // break sai do loop da cpu
+						if(interrupt != Interrupts.interruptIO) {
+							break; 
+						}
+						// break sai do loop da cpu
 					}
 					if(flag) {
 						break;
@@ -326,6 +334,9 @@ public class Sistema {
 			ProcessControlBlock newProcess = new ProcessControlBlock(currentProcessIdentifier, memoryPages);
 			processList.add(newProcess);
 			currentProcessIdentifier++;
+			if(vm.cpu1.cpuAtiva == false && processList.size() == 1) {
+				vm.processManager.scheduler();
+			}
 			return true;
 		}
 
@@ -396,6 +407,7 @@ public class Sistema {
 					cpu.reg = runningProcess.reg;
 					cpu.pageTable = runningProcess.memoryPages;
 					cpu.interrupt = Interrupts.interruptNone;
+					vm.cpu1.cpuAtiva = true;
 					// ---------------------------------------------------SCHEDULER TEST
 					// Aux aux = new Aux();
 					// aux.dump(vm.m, 0, 128);
@@ -418,10 +430,11 @@ public class Sistema {
 		}
 
 		public void stop() {
+			vm.cpu1.cpuAtiva = false;
 			runningProcess.state = State.FINISHED;
 			// should free the memory, but doesn't for debugging purposes
 			// memoryManager.free(runningProcess.memoryPages);
-			processList.remove(runningProcess);
+			// processList.remove(runningProcess);
 			System.out.println("STOPPED PROCESS ID: " + runningProcess.id);
 			scheduler();
 		}
@@ -445,6 +458,9 @@ public class Sistema {
 			blockedProcessList.remove(pcb);
 			pcb.state = State.READY;
 			processList.add(pcb);
+			if(vm.cpu1.cpuAtiva == false && processList.size() == 1) {
+				vm.processManager.scheduler();
+			}
 		}
 
 		public void saveContext() {
@@ -691,7 +707,8 @@ public class Sistema {
 				case interruptIO:
 					// System.out.println("+++interruptIO+++");
 					vm.processManager.finishIO();
-					vm.processManager.scheduler();
+					// TENHO QUE SALVAR CONTEXTO ATUAL 0------  salvar contexto do atual
+					// vm.processManager.scheduler(); //<-
 					break;
 
 				default:
@@ -1045,19 +1062,19 @@ public class Sistema {
 					program = new Programas().programTestTrapInput;
 					status = vm.processManager.createProcess(program);
 					System.out.println("new process successful? " + status);
-					vm.cpu1.interruptHandler.handle(Interrupts.interruptScheduler);
+					// vm.cpu1.interruptHandler.handle(Interrupts.interruptScheduler);
 					break;
 				case 4:
 					program = new Programas().programTestTrapOutput;
 					status = vm.processManager.createProcess(program);
 					System.out.println("new process successful? " + status);
-					vm.cpu1.interruptHandler.handle(Interrupts.interruptScheduler);
+					// vm.cpu1.interruptHandler.handle(Interrupts.interruptScheduler);
 					break;
 				case 5:
 					program = new Programas().fibonacci10;
 					status = vm.processManager.createProcess(program);
 					System.out.println("new process successful? " + status);
-					vm.cpu1.interruptHandler.handle(Interrupts.interruptScheduler);
+					// vm.cpu1.interruptHandler.handle(Interrupts.interruptScheduler);
 					break;
 				case 6:
 					// System.out.println("idle");
